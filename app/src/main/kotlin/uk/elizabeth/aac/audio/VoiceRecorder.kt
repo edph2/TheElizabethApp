@@ -9,7 +9,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import uk.elizabeth.aac.core.audio.PcmAudio
 import uk.elizabeth.aac.core.audio.Wav
-import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
 
 /**
@@ -43,7 +42,7 @@ class VoiceRecorder {
         val chunk = ShortArray(rate / 20)
         try {
             recorder.startRecording()
-            while (coroutineContext.isActive && !stopRequested && count < maxSamples) {
+            while (isActive && !stopRequested && count < maxSamples) {
                 val n = recorder.read(chunk, 0, minOf(chunk.size, maxSamples - count))
                 if (n <= 0) break
                 chunk.copyInto(out, count, 0, n)

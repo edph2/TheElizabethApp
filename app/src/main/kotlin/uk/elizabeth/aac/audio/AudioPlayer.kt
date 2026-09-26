@@ -35,7 +35,7 @@ class AudioPlayer {
         if (loop) {
             newTrack.setLoopPoints(0, audio.samples.size, -1)
         } else {
-            newTrack.notificationMarkerPosition = audio.samples.size
+            newTrack.setNotificationMarkerPosition(audio.samples.size)
             newTrack.setPlaybackPositionUpdateListener(object : AudioTrack.OnPlaybackPositionUpdateListener {
                 override fun onMarkerReached(t: AudioTrack) {
                     if (track === t) stop()
