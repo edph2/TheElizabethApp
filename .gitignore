@@ -1,0 +1,13 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+.kotlin/
+*.keystore
+*.jks
+# Never commit voice recordings or voice models: they are personal data.
+*.wav
+*.onnx
+voice-data/
