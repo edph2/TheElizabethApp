@@ -1,6 +1,6 @@
 # The Elizabeth App: Design
 
-**Status:** proposal, not yet built · **Date:** 26 September 2026
+**Status:** Phase 1 in progress (see the README for what is built) · **Date:** 26 September 2026
 
 An Android tablet app that lets someone who is losing her speech communicate quickly by
 selecting words and phrases, or by typing. Her messages are spoken aloud in a voice she
@@ -131,7 +131,7 @@ unit-tested thoroughly with recorded touch sequences.
 
 With her consent, the app would keep simple on-device statistics: how often she presses
 Undo straight after a press, and how often touches land in gaps. It would then **suggest**
-settings changes, such as "increase slip grace", for a carer or therapist to approve. It
+settings changes, such as "increase slip grace", for a carer to approve. It
 never changes settings silently, because that would break her motor memory.
 
 ---
@@ -204,7 +204,7 @@ never works well, and it is often what families value most.
 
 1. The carer exports an **encrypted, passphrase-protected archive** of the recordings and
    script over USB to a **trusted local computer** (Linux with an NVIDIA GPU, owned by the
-   family or an NHS/clinical partner). A GPU server located in the EU, run under a data
+   family). A GPU server located in the EU, run under a data
    processing agreement, is a fallback.
 2. On that computer, an open-source Piper training script fine-tunes an existing British
    English Piper model on her recordings. This takes a few hours of GPU time.
@@ -312,7 +312,7 @@ other than her.*
   data on the developer's systems, **the developer is not a controller** of her data. This
   is the strongest position available, and it follows directly from the design choice
   of having no network access.
-- If carers from an agency or the NHS use it as part of their work, they may become
+- If paid carers use it as part of their work, they may become
   controllers or processors of what they enter or see. Their organisation's policies
   then apply.
 - A **DPIA** (Art. 35) is recommended as good practice and would be included in the repo,
@@ -394,8 +394,7 @@ other than her.*
   tablet layout.
 - **Testing:** the `core` module is unit-tested with recorded touch sequences (tremor,
   slips and palm contacts) and prediction scenarios. The UI is tested with Compose tests,
-  and the app is checked in usability sessions with Elizabeth and her speech and
-  language therapist.
+  and the app is checked in usability sessions with Elizabeth and her family.
 - **CI:** GitHub Actions builds the app, runs the tests, checks that no `INTERNET`
   permission is present (the build fails if it is), checks licences and generates the
   SBOM.
@@ -415,7 +414,7 @@ other than her.*
 
 | Phase | Delivers | Why this order |
 |---|---|---|
-| **0 (now, no app needed)** | Message banking and early voice banking with a good microphone; referral to an NHS specialised AAC service or speech and language therapist | Her voice is time-critical. Everything else can wait. |
+| **0 (now, no app needed)** | Message banking and early voice banking with a good microphone | Her voice is time-critical. Everything else can wait. |
 | **1: MVP** | Main screen, quick replies, phrase pages, keyboard, touch filtering, undo, word prediction, offline system TTS, playback of message-banked clips, encrypted storage, export and erase | Useful communication as soon as possible |
 | **2: Her voice** | In-app voice banking with quality checks, the Piper training pipeline, the embedded sherpa-onnx engine, voice consent records | Speak in her own voice |
 | **3: Adaptation** | Dwell refinements, switch scanning, keyguard templates, settings suggestions, listener view | Keep her communicating as her abilities decline |
