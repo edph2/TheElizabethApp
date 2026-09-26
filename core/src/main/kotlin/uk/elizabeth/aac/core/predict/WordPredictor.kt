@@ -27,6 +27,11 @@ class WordPredictor(seedWords: List<String> = emptyList()) {
     /** Number of distinct words learned from her. */
     val learnedWordCount: Int get() = unigrams.size
 
+    /** Words learned from her with how often she has used each, most used first. */
+    fun learnedWords(): List<Pair<String, Int>> =
+        unigrams.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            .map { it.key to it.value }
+
     /** Learns from the words of a message that was spoken. */
     fun learn(words: List<String>) {
         val clean = words.map { it.lowercase() }.filter { isLearnable(it) }

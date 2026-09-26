@@ -65,6 +65,9 @@ class MessageEditor(initial: String = "", private val maxUndo: Int = 50) {
         if (text.isNotEmpty()) edit("")
     }
 
+    /** Replaces the whole message, e.g. with a previous message chosen from suggestions. */
+    fun replaceAll(newText: String) = edit(newText)
+
     fun undo(): Boolean {
         val previous = undoStack.removeLastOrNull() ?: return false
         text = previous
