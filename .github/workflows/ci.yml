@@ -36,6 +36,9 @@ jobs:
       - name: Lint
         run: ./gradlew --no-daemon :app:lintDebug
 
+      - name: Software bill of materials
+        run: ./gradlew --no-daemon cyclonedxBom
+
       - name: Check the app has no network permissions
         run: |
           tools/check_no_network.sh app/build/outputs/apk/debug/app-debug.apk
@@ -46,6 +49,12 @@ jobs:
         with:
           name: elizabeth-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: build/reports/bom.*
 
       - name: Upload reports
         if: always()
