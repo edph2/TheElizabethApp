@@ -1,0 +1,38 @@
+# Temporary: inspects the sherpa-onnx release so the app can pin exact files and hashes.
+name: Probe sherpa-onnx
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.tag_name'
+          gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.assets[].name' | grep -iE 'aar|android|espeak' | head -50
+          gh api repos/k2-fsa/sherpa-onnx/releases/tags/tts-models --jq '.assets[].name' | grep -iE 'espeak|en_GB' | head -40 || true
+      - name: Inspect AAR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.tag_name')
+          aar=$(gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.assets[].name' | grep -E '\.aar$' | grep -v -i 'static\|java' | head -1)
+          echo "AAR=$aar"
+          gh release download "$tag" -R k2-fsa/sherpa-onnx -p "$aar"
+          sha256sum "$aar"; ls -la "$aar"
+          unzip -l "$aar" | head -40
+          mkdir x && cd x && unzip -q "../$aar" && unzip -q -o classes.jar -d classes
+          find classes -name '*Tts*' | head -40
+          for c in OfflineTts OfflineTtsConfig OfflineTtsModelConfig OfflineTtsVitsModelConfig GeneratedAudio; do
+            javap -cp classes com.k2fsa.sherpa.onnx.$c || true
+          done
+      - name: espeak-ng-data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download tts-models -R k2-fsa/sherpa-onnx -p 'espeak-ng-data.tar.bz2' && sha256sum espeak-ng-data.tar.bz2 && ls -la espeak-ng-data.tar.bz2 && tar tjf espeak-ng-data.tar.bz2 | head -20 && tar tjf espeak-ng-data.tar.bz2 | wc -l || true
