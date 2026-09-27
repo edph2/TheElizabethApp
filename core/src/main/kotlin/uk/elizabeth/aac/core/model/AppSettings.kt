@@ -1,6 +1,7 @@
 package uk.elizabeth.aac.core.model
 
 import kotlinx.serialization.Serializable
+import uk.elizabeth.aac.core.scan.ScanSettings
 import uk.elizabeth.aac.core.touch.TouchSettings
 
 @Serializable
@@ -22,6 +23,9 @@ data class SpeechSettings(
 @Serializable
 data class AppSettings(
     val touch: TouchSettings = TouchSettings(),
+    val scan: ScanSettings = ScanSettings(),
+    /** Hide the Android status and navigation bars. Keeps buttons in fixed places for a keyguard. */
+    val fullScreen: Boolean = false,
     val speech: SpeechSettings = SpeechSettings(),
     val gridColumns: Int = 4,
     val gridRows: Int = 3,
@@ -46,6 +50,7 @@ data class AppSettings(
 ) {
     fun sanitised(): AppSettings = copy(
         touch = touch.sanitised(),
+        scan = scan.sanitised(),
         speech = speech.copy(rate = speech.rate.coerceIn(0.3f, 2.5f), pitch = speech.pitch.coerceIn(0.5f, 2.0f)),
         gridColumns = gridColumns.coerceIn(2, 6),
         gridRows = gridRows.coerceIn(2, 5),

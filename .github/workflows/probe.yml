@@ -9,30 +9,26 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: List release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.tag_name'
-          gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.assets[].name' | grep -iE 'aar|android|espeak' | head -50
-          gh api repos/k2-fsa/sherpa-onnx/releases/tags/tts-models --jq '.assets[].name' | grep -iE 'espeak|en_GB' | head -40 || true
       - name: Inspect AAR
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag=$(gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.tag_name')
-          aar=$(gh api repos/k2-fsa/sherpa-onnx/releases/latest --jq '.assets[].name' | grep -E '\.aar$' | grep -v -i 'static\|java' | head -1)
-          echo "AAR=$aar"
-          gh release download "$tag" -R k2-fsa/sherpa-onnx -p "$aar"
-          sha256sum "$aar"; ls -la "$aar"
-          unzip -l "$aar" | head -40
-          mkdir x && cd x && unzip -q "../$aar" && unzip -q -o classes.jar -d classes
-          find classes -name '*Tts*' | head -40
-          for c in OfflineTts OfflineTtsConfig OfflineTtsModelConfig OfflineTtsVitsModelConfig GeneratedAudio; do
-            javap -cp classes com.k2fsa.sherpa.onnx.$c || true
-          done
-      - name: espeak-ng-data
+          gh release download v1.13.8 -R k2-fsa/sherpa-onnx -p 'sherpa-onnx-1.13.8.aar'
+          sha256sum sherpa-onnx-1.13.8.aar; ls -la sherpa-onnx-1.13.8.aar
+          unzip -l sherpa-onnx-1.13.8.aar
+          unzip -p sherpa-onnx-1.13.8.aar AndroidManifest.xml; echo
+          unzip -p sherpa-onnx-1.13.8.aar META-INF/com/android/build/gradle/aar-metadata.properties; echo
+          curl -sSLI https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar | grep -iE '^(HTTP|location)' | head -5
+      - name: Piper voice archive layout
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download tts-models -R k2-fsa/sherpa-onnx -p 'espeak-ng-data.tar.bz2' && sha256sum espeak-ng-data.tar.bz2 && ls -la espeak-ng-data.tar.bz2 && tar tjf espeak-ng-data.tar.bz2 | head -20 && tar tjf espeak-ng-data.tar.bz2 | wc -l || true
+          gh release download tts-models -R k2-fsa/sherpa-onnx -p 'vits-piper-en_GB-alba-medium.tar.bz2'
+          tar tjf vits-piper-en_GB-alba-medium.tar.bz2 | grep -v espeak-ng-data/ ; tar tjf vits-piper-en_GB-alba-medium.tar.bz2 | grep espeak-ng-data/ | grep -vE '_dict$' | head -60
+          tar xjf vits-piper-en_GB-alba-medium.tar.bz2
+          head -5 vits-piper-en_GB-alba-medium/tokens.txt; wc -l vits-piper-en_GB-alba-medium/tokens.txt
+          pip install -q onnx
+          python3 -c "import onnx; m=onnx.load('vits-piper-en_GB-alba-medium/en_GB-alba-medium.onnx'); print({p.key: p.value for p in m.metadata_props})"
+          ls vits-piper-en_GB-alba-medium; cat vits-piper-en_GB-alba-medium/*.json 2>/dev/null | head -c 600 || true
+          find vits-piper-en_GB-alba-medium/espeak-ng-data -name '*[^A-Za-z0-9._/-]*' | head
+          du -sh vits-piper-en_GB-alba-medium/espeak-ng-data
