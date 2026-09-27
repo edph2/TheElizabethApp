@@ -110,6 +110,17 @@ Requirements: JDK 17 or later. The Android SDK is only needed for the app itself
 tools/check_no_network.sh app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Every dependency is checked against the SHA-256 in `gradle/verification-metadata.xml`, and
+the sherpa-onnx AAR against the hash pinned in `app/build.gradle.kts`. After changing a
+dependency, regenerate the metadata and review the diff:
+
+```
+./gradlew --write-verification-metadata sha256 :core:test :app:assembleDebug :app:assembleRelease \
+    :app:lintDebug cyclonedxBom :app:connectedDebugAndroidTest
+```
+
+CI also publishes an SBOM (CycloneDX) listing everything that ships in the app.
+
 ## Layout
 
 - `core/`: pure Kotlin, unit-tested. Contains touch filtering, the message editor, word
