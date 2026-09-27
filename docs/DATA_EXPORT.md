@@ -2,7 +2,7 @@
 
 The app writes two kinds of encrypted `.elizbak` file, both only when a carer asks:
 
-- **Export all data** (Settings → Privacy and data) is used to move to a new tablet, with
+- **Back up now** (Settings → Privacy and data, or the voice banking screen) is used to move to a new tablet, with
   **Restore from export**, and to give Elizabeth a copy of her data (the GDPR rights of
   access and portability).
 - **Export recordings for voice training** (Settings → Voice banking) contains only the
@@ -38,7 +38,7 @@ pip install cryptography
 python3 tools/decrypt_export.py elizabeth-export.elizbak elizabeth-export.zip
 ```
 
-## Contents of "Export all data"
+## Contents of a backup
 
 | File | Contents |
 |---|---|
@@ -47,6 +47,8 @@ python3 tools/decrypt_export.py elizabeth-export.elizbak elizabeth-export.zip
 | `words.txt` | Words learned for prediction, one per line as `order<TAB>words…<TAB>count` |
 | `recordings/<id>.wav` | Phrases recorded in her voice (message banking). `appdata.json` links each phrase to its recording id. |
 | `voicebank/<id>.wav` | Voice banking recordings. `appdata.json` (`voiceBank.takes`) links each one to its sentence. |
+| `voices/<id>/...` | Installed voice models, if "Include installed voices" was on. Same layout as an unpacked `.elizvoice`: `manifest.json`, `model.onnx`, `tokens.txt` and `espeak-ng-data/`. Each is checked against its manifest when restored. |
+| `backup-info.json` | When the backup was made, and how many recordings, voice banking recordings and voices it contains |
 
 All audio is 16-bit mono PCM WAV at 22.05 kHz.
 

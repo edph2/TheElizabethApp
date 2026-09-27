@@ -40,16 +40,9 @@ fun PrivacyScreen(state: UiState, vm: AppViewModel) {
     val data = state.data
     val s = data.settings
     var confirm by remember { mutableStateOf<Confirm?>(null) }
-    var exportPassphrase by remember { mutableStateOf<CharArray?>(null) }
-    var askExportPassphrase by remember { mutableStateOf(false) }
     var importUri by remember { mutableStateOf<Uri?>(null) }
     var showAllWords by remember { mutableStateOf(false) }
 
-    val createFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-        val passphrase = exportPassphrase
-        exportPassphrase = null
-        if (uri != null && passphrase != null) vm.exportTo(uri, passphrase) else passphrase?.fill(' ')
-    }
     val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> importUri = uri }
 
     val recordings = data.board.allPhrases().count { it.recordingId != null }
@@ -100,15 +93,16 @@ fun PrivacyScreen(state: UiState, vm: AppViewModel) {
                 }
             }
 
-            Section("Export and restore") {
+            Section("Back up") {
+                BackupPanel(state, vm)
+            }
+
+            Section("Restore") {
                 Text(
-                    "The export is one encrypted file containing her phrases, settings, history, learned words " +
-                        "and recordings, in open formats. Use it to move to a new tablet or to give her a copy of her data.",
+                    "Restore everything from a backup, for example onto a new tablet. The backup is also a copy of her " +
+                        "data in open formats (JSON, text and WAV) that she can have.",
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { askExportPassphrase = true }) { Text("Export all data") }
-                    OutlinedButton(onClick = { openFile.launch(arrayOf("*/*")) }) { Text("Restore from export") }
-                }
+                OutlinedButton(enabled = !state.backupBusy, onClick = { openFile.launch(arrayOf("*/*")) }) { Text("Restore from a backup") }
             }
 
             Section("Erase") {
@@ -144,25 +138,17 @@ fun PrivacyScreen(state: UiState, vm: AppViewModel) {
         Confirm.EVERYTHING -> ConfirmDialog(
             "Erase everything?",
             "This permanently deletes all phrases, recordings of her voice, history, learned words and settings, " +
-                "and destroys the encryption key. It cannot be undone. Export first if you might want anything back.",
+                "and destroys the encryption key. It cannot be undone. Back up first if you might want anything back.",
             "Erase everything",
             onConfirm = vm::eraseEverything, onDismiss = { confirm = null },
         )
         null -> Unit
     }
 
-    if (askExportPassphrase) {
-        PassphraseDialog("Choose a passphrase", confirm = true, onSubmit = {
-            askExportPassphrase = false
-            exportPassphrase = it
-            createFile.launch("elizabeth-export.elizbak")
-        }, onDismiss = { askExportPassphrase = false })
-    }
-
     importUri?.let { uri ->
-        PassphraseDialog("Passphrase for this export", confirm = false, onSubmit = {
+        PassphraseDialog("Passphrase for this backup", confirm = false, onSubmit = {
             importUri = null
             vm.importFrom(uri, it)
-        }, onDismiss = { importUri = null }, message = "Restoring replaces everything currently on this tablet with the contents of the export.")
+        }, onDismiss = { importUri = null }, message = "The whole backup is checked first. Restoring then replaces everything on this tablet with the backup's contents; installed voices not in the backup are kept.")
     }
 }

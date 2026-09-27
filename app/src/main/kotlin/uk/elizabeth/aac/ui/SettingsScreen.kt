@@ -62,6 +62,7 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, cont
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
             CarerHeader("Settings") { vm.openScreen(Screen.MAIN) }
+            BackupReminderCard(state) { vm.openScreen(Screen.PRIVACY) }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = { vm.openScreen(Screen.PHRASES) }) { Text("Edit phrases and recordings") }

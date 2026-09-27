@@ -44,6 +44,8 @@ import uk.elizabeth.aac.data.Repository
 import uk.elizabeth.aac.speech.PiperVoice
 import uk.elizabeth.aac.speech.Speaker
 import uk.elizabeth.aac.speech.VoiceModels
+import java.text.DateFormat
+import java.util.Date
 import java.util.UUID
 import kotlin.coroutines.resume
 
@@ -97,6 +99,8 @@ data class UiState(
     val installedVoices: List<VoiceInfo> = emptyList(),
     /** True while an installed voice is preparing or speaking a message. */
     val customSpeaking: Boolean = false,
+    /** True while a backup is being written, checked or restored. */
+    val backupBusy: Boolean = false,
 )
 
 data class VoiceInfo(val id: String, val manifest: VoiceManifest)
@@ -645,36 +649,85 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun exportTo(uri: Uri, passphrase: CharArray) {
+    /**
+     * Writes an encrypted backup to [uri] (a USB stick, the Google Drive app, or any storage the
+     * carer picks: the app itself never uses the network). Afterwards every recording now in the
+     * backup counts as saved.
+     */
+    fun exportTo(uri: Uri, passphrase: CharArray, includeVoices: Boolean) {
+        val data = _state.value.data
+        val recordingIds = data.recordingIds()
+        _state.update { it.copy(backupBusy = true) }
         viewModelScope.launch {
             runCatching {
-                repository.exportBackup(openOutput(uri), _state.value.data, predictor.export(), passphrase)
-            }.onSuccess {
-                updateData { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.DATA_EXPORTED, now())) }
-                notify("Export saved. Keep the passphrase safe: without it the file cannot be opened.")
-            }.onFailure { e -> notify("Export failed: ${e.message}") }
+                val voices = if (includeVoices) withContext(Dispatchers.IO) { voiceModels.list() } else emptyList()
+                repository.exportBackup(openOutput(uri), data, predictor.export(), passphrase, voiceModels, voices, now())
+            }.onSuccess { info ->
+                updateData {
+                    it.copy(
+                        backupStatus = it.backupStatus.afterBackup(now(), recordingIds),
+                        privacyLog = it.privacyLog.append(PrivacyEventType.DATA_EXPORTED, now(), "${info.recordings + info.voiceTakes} recordings, ${info.voices} voices"),
+                    )
+                }
+                notify(
+                    "Backup saved: ${info.recordings + info.voiceTakes} recordings" +
+                        (if (info.voices > 0) " and ${info.voices} voice(s)" else "") +
+                        ". Keep the passphrase safe and separate: without it the backup cannot be opened.",
+                )
+            }.onFailure { e -> notify("Backup failed: ${e.message}. Nothing was marked as backed up.") }
+            _state.update { it.copy(backupBusy = false) }
+            passphrase.fill(' ')
+        }
+    }
+
+    /** Reads a whole backup and checks it, without changing anything. */
+    fun checkBackup(uri: Uri, passphrase: CharArray) {
+        _state.update { it.copy(backupBusy = true) }
+        viewModelScope.launch {
+            runCatching {
+                val resolver = getApplication<Application>().contentResolver
+                (resolver.openInputStream(uri) ?: error("Could not open the file")).use { repository.checkBackup(it, passphrase) }
+            }.onSuccess { info ->
+                val date = if (info.createdAtMillis > 0) DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(info.createdAtMillis)) else "an unknown date"
+                notify("✓ This backup is complete and readable. Made $date, with ${info.recordings} recorded phrases, ${info.voiceTakes} voice banking recordings and ${info.voices} voice(s).")
+            }.onFailure { e ->
+                notify(if (e is WrongPassphraseException) "✗ Wrong passphrase, or the backup is damaged." else "✗ This backup cannot be used: ${e.message}")
+            }
+            _state.update { it.copy(backupBusy = false) }
             passphrase.fill(' ')
         }
     }
 
     fun importFrom(uri: Uri, passphrase: CharArray) {
+        _state.update { it.copy(backupBusy = true) }
         viewModelScope.launch {
             val log = _state.value.data.privacyLog
             runCatching {
                 val resolver = getApplication<Application>().contentResolver
-                repository.restoreBackup({ resolver.openInputStream(uri) ?: error("Could not open the file") }, passphrase)
+                repository.restoreBackup({ resolver.openInputStream(uri) ?: error("Could not open the file") }, passphrase, voiceModels)
             }.onSuccess { result ->
-                // Keep this tablet's privacy log and record the restore in it.
-                val data = result.data.copy(privacyLog = log.append(PrivacyEventType.DATA_RESTORED, now()))
+                // Keep this tablet's privacy log and record the restore in it. Everything restored
+                // is, by definition, in that backup.
+                val data = result.data.copy(
+                    privacyLog = log.append(PrivacyEventType.DATA_RESTORED, now()),
+                    backupStatus = result.data.backupStatus.afterBackup(result.info.createdAtMillis, result.data.recordingIds()),
+                )
                 predictor.import(result.wordModel)
                 _state.update { it.copy(data = data, tab = data.board.categories.firstOrNull()?.id ?: Tabs.KEYBOARD, page = 0, promptIndex = 0) }
                 saveData.trySend(Unit)
+                piper?.release()
+                piper = null
                 configureSpeech(data.settings.speech)
+                refreshVoices()
                 refreshText()
-                notify("Data restored")
+                notify(
+                    if (result.failedVoices.isEmpty()) "Data restored"
+                    else "Data restored, but these voices failed their checks and were not installed: ${result.failedVoices.joinToString()}",
+                )
             }.onFailure { e ->
-                notify(if (e is WrongPassphraseException) "Wrong passphrase, or the file is damaged" else "Could not restore: ${e.message}")
+                notify(if (e is WrongPassphraseException) "Wrong passphrase, or the file is damaged. Nothing was changed." else "Could not restore: ${e.message}")
             }
+            _state.update { it.copy(backupBusy = false) }
             passphrase.fill(' ')
         }
     }

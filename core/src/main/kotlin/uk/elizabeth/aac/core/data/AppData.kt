@@ -21,7 +21,12 @@ data class AppData(
     val voiceBank: VoiceBank = VoiceBank(),
     val touchStats: TouchStats = TouchStats(),
     val pinGuard: PinGuard = PinGuard(),
+    val backupStatus: BackupStatus = BackupStatus(),
 ) {
+    /** Every recording in her voice: recorded phrases and voice banking takes. */
+    fun recordingIds(): Set<String> =
+        board.allPhrases().mapNotNull { it.recordingId }.toSet() + voiceBank.takes.map { it.recordingId }
+
     fun toJson(): String = json.encodeToString(serializer(), this)
 
     companion object {

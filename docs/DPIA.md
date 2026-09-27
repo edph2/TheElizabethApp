@@ -35,7 +35,8 @@ does not let it open network connections. This is checked in every CI build, and
 real Android system by an instrumented test. Data leaves the tablet only when a carer
 chooses to:
 
-- export a backup (passphrase-encrypted), or
+- export a backup (passphrase-encrypted) to a place the carer chooses, such as a USB stick
+  or a cloud storage app like Google Drive (see §7a), or
 - export voice banking recordings for training (passphrase-encrypted), or
 - print the paper board.
 
@@ -104,6 +105,25 @@ capacity, and the app is designed so that she can see and control what it keeps.
 
 **Accuracy:** word prediction only offers suggestions, and she always chooses what is said.
 
+## 7a. Cloud storage of backups (e.g. Google Drive)
+
+Her voice recordings are irreplaceable, and losing the tablet would lose them, so the family
+may store backups in a cloud service.
+
+- **Safeguards:** the backup is encrypted on the tablet with AES-256-GCM, using a key
+  derived from a passphrase that only the family holds. The cloud provider receives only
+  ciphertext. It can see the file name (which includes "elizabeth-backup" and a date), the
+  size and the timestamps.
+- **Remaining risks:**
+  - a weak passphrase;
+  - metadata;
+  - the provider's jurisdiction. For Google this is the US, although the content is
+    unreadable to Google.
+- **Decision:** this is Elizabeth's choice. Record it in §10. If a non-US provider is
+  preferred, a USB stick or an EU-hosted cloud storage app gives the same protection.
+- **The app is unchanged by this:** it still has no internet permission. Uploading is done
+  by the separate storage app, only when a carer chooses that destination.
+
 ## 8. Risks
 
 | # | Risk | Likelihood | Severity | Measures | Residual |
@@ -114,7 +134,8 @@ capacity, and the app is designed so that she can see and control what it keeps.
 | R4 | Her cloned voice misused (e.g. a deepfake) | Remote | Severe | Synthesised speech is never saved to a file; voice packages are encrypted and must carry a consent record; withdrawing consent removes voices made from the recordings; training data deleted after use | Low |
 | R5 | Recordings exposed during training | Possible | Significant | Encrypted export; checksums and consent checked before training; guidance: trusted computer, disk encryption, no cloud sync, delete afterwards | Medium: depends on the people training |
 | R6 | Export file obtained by someone else | Possible | Significant | AES-256-GCM with a passphrase-derived key; tampering and truncation detected | Low if the passphrase is strong |
-| R7 | Data lost (tablet broken) and she loses her phrases and voice | Possible | Significant | Encrypted export and restore; printed paper board as a back-up | Low if exports are made regularly |
+| R7 | Data lost (tablet broken or stolen) and she loses her phrases and irreplaceable voice recordings | Possible | Severe | Encrypted backup to a USB stick or cloud storage (§7a); reminders when recordings are not backed up or the last backup is over 7 days old; installed voices can be included; "Check a backup" verifies a copy without changing anything; paper board | Low if reminders are acted on and two copies are kept |
+| R11 | Encrypted backup in cloud storage is obtained by others | Possible | Significant | Encryption before upload; strong passphrase kept separately; metadata limited to file name, size and date | Low |
 | R8 | Donor's voice used without valid consent | Remote | Significant | Consent statement recorded before voice banking; a voice without consent is refused on import | Low |
 | R9 | Malicious voice package or library | Remote | Significant | Checksums verified; unsafe file names refused; the speech library pinned by SHA-256; SBOM published | Low |
 | R10 | Speech failure leaves her unable to communicate | Possible | Severe (safety) | Large-text fallback, attention chime, the Android voice as back-up, home-screen mode to return after a crash, paper board | Low |
@@ -138,3 +159,4 @@ the family carries out training.
 | Elizabeth | | | |
 | Family member responsible for the tablet | | | |
 | Person who will train the voice (if any) | | | |
+| Where backups are kept (e.g. Google Drive, USB stick) | | | |

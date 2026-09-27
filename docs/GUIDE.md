@@ -53,8 +53,41 @@ finger on a button instead.
   whenever the phrases change.
 - **Privacy and data:** see what the app knows, switch learning or history off, export a
   backup, restore, or erase.
-- **Back-ups:** export regularly (Settings → Privacy and data → Export all data). Keep the
-  file and passphrase safe. Without the passphrase nobody can open it, including you.
+- **Back-ups (important):** her voice recordings cannot be made again once her voice
+  changes. See "Backing up" below.
+
+## Backing up
+
+If the tablet is lost, stolen or broken, anything not backed up is gone, including every
+recording of her voice.
+
+- **When:** at the end of every voice banking or recording session, and at least weekly.
+  Settings shows a warning when recordings are not in a backup, or the last backup is more
+  than 7 days old. The voice banking screen shows the same warning.
+- **How:** Settings → Privacy and data → **Back up now** (also on the voice banking
+  screen). Choose a passphrase, then choose where to save it. Android's save screen offers:
+  - a **USB stick or SD card**;
+  - **Google Drive**, if its app is installed;
+  - any other storage app on the tablet.
+- **Is it safe in Google Drive?** The file is encrypted on the tablet, with the passphrase,
+  before Drive receives it. Google stores it but cannot read it. It can see the file's name,
+  size and date, and the name includes "elizabeth-backup" and the date.
+  - If you would rather not use a US company, use a USB stick, or an EU-hosted cloud whose
+    Android app appears in the same save screen.
+  - Either way, the app itself never connects to the internet: the Drive app does the
+    uploading.
+- **Two copies:** keep two backups in different places, such as Google Drive and a USB
+  stick kept at a relative's house.
+- **The passphrase:** write it down and keep it apart from the tablet and the backup, such
+  as in a family password manager or a sealed envelope. Without it, nobody can open the
+  backup, including you.
+- **Installed voices:** switch on "Include installed voices" so that one file restores
+  everything. Also keep the original `.elizvoice` files.
+- **Check it:** now and then, use **Check a backup** on the file in Drive or on the USB
+  stick. It reads and checks every part of the file without changing anything on the
+  tablet.
+- **Restoring on a new tablet:** install the app, then Settings → Privacy and data →
+  Restore from a backup.
 
 ## About the AI in this app (please read)
 

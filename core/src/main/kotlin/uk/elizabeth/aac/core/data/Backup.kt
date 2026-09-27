@@ -23,13 +23,21 @@ class WrongPassphraseException : IOException("Wrong passphrase, or the file is d
 /** Adds files to an export. */
 class BackupWriter internal constructor(private val zip: ZipOutputStream) {
     fun put(name: String, bytes: ByteArray) {
-        require(Backup.isValidEntryName(name)) { "Bad entry name: $name" }
+        require(Backup.isSafeRelativePath(name)) { "Bad entry name: $name" }
         zip.putNextEntry(ZipEntry(name))
         zip.write(bytes)
         zip.closeEntry()
     }
 
     fun put(name: String, text: String) = put(name, text.toByteArray(Charsets.UTF_8))
+
+    /** Adds a file without loading it into memory (for large files such as voice models). */
+    fun put(name: String, data: InputStream) {
+        require(Backup.isSafeRelativePath(name)) { "Bad entry name: $name" }
+        zip.putNextEntry(ZipEntry(name))
+        data.copyTo(zip)
+        zip.closeEntry()
+    }
 }
 
 /**
@@ -61,14 +69,22 @@ object Backup {
     const val APP_DATA = "appdata.json"
     const val WORDS = "words.txt"
     const val README_NAME = "README.txt"
+    const val INFO = "backup-info.json"
     fun recordingEntry(id: String) = "recordings/$id.wav"
     fun voiceBankEntry(id: String) = "voicebank/$id.wav"
+    const val VOICES_PREFIX = "voices/"
+    fun voiceModelEntry(id: String, relativePath: String) = "$VOICES_PREFIX$id/$relativePath"
+
+    /** A file name that sorts by date, so the newest backup is easy to find. */
+    fun suggestedFileName(prefix: String, date: java.time.LocalDate) = "$prefix-$date.elizbak"
 
     const val README = """This is an export of data from The Elizabeth App.
 appdata.json   settings, phrases, message history, voice bank progress and the privacy log (JSON)
 words.txt      words the app has learned for prediction (tab-separated text)
 recordings/    phrases recorded in her voice (16-bit mono WAV)
 voicebank/     voice banking recordings (16-bit mono WAV); the sentence for each is in appdata.json
+voices/        installed voice models, if included (Piper ONNX model, phoneme table, pronunciation data)
+backup-info.json  when the backup was made and what it contains
 """
 
     fun isValidEntryName(name: String) = entryName.matches(name) && ".." !in name

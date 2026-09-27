@@ -212,6 +212,14 @@ private fun Recorder(state: UiState, bank: VoiceBank, vm: AppViewModel) {
             }
         }
 
+        Section("Back up her recordings") {
+            Text(
+                "These recordings cannot be made again once her voice changes. Back them up at the end of every session.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            BackupPanel(state, vm, showCheck = false)
+        }
+
         Section("Make the voice") {
             Text(
                 "Export the recordings to train a voice model on a trusted computer (see tools/voice-training in the app's " +
