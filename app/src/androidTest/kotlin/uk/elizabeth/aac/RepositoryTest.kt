@@ -19,6 +19,7 @@ import uk.elizabeth.aac.speech.PiperVoice
 import uk.elizabeth.aac.speech.VoiceModels
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class RepositoryTest {
@@ -85,30 +86,37 @@ class RepositoryTest {
         val assets = instrumentation.context.assets
         assumeTrue("test voice not packaged", assets.list("")?.contains("test.elizvoice") == true)
         val repo = Repository(context)
-        val voice = assets.open("test.elizvoice").use { voices.import(it, "correct horse battery".toCharArray()) }
-
-        val out = ByteArrayOutputStream()
-        val info = repo.exportBackup(out, AppData(), "", "correct horse".toCharArray(), voices, voices.list(), 1)
-        assertEquals(1, info.voices)
+        // Written to a file, as the app does: a backup with a voice is too big to hold in memory.
+        val backup = File(context.cacheDir, "voice-backup-test.elizbak")
         voices.deleteAll()
-        assertTrue(voices.list().isEmpty())
-
-        val export = out.toByteArray()
-        assertEquals(1, repo.checkBackup(ByteArrayInputStream(export), "correct horse".toCharArray()).voices)
-        val result = repo.restoreBackup({ ByteArrayInputStream(export) }, "correct horse".toCharArray(), voices)
-        assertTrue(result.failedVoices.isEmpty())
-        val restored = voices.list().single()
-        assertEquals(voice.id, restored.id)
-        assertEquals(voice.manifest.modelSha256, restored.manifest.modelSha256)
-
-        // The restored voice still speaks.
-        val piper = PiperVoice(restored)
         try {
-            assertTrue(piper.synthesize("Hello again.", 1.0f).durationMs > 300)
+            val voice = assets.open("test.elizvoice").use { voices.import(it, "correct horse battery".toCharArray()) }
+
+            val info = backup.outputStream().use { out ->
+                repo.exportBackup(out, AppData(), "", "correct horse".toCharArray(), voices, voices.list(), 1)
+            }
+            assertEquals(1, info.voices)
+            voices.deleteAll()
+            assertTrue(voices.list().isEmpty())
+
+            assertEquals(1, backup.inputStream().use { repo.checkBackup(it, "correct horse".toCharArray()) }.voices)
+            val result = repo.restoreBackup({ backup.inputStream() }, "correct horse".toCharArray(), voices)
+            assertTrue(result.failedVoices.isEmpty())
+            val restored = voices.list().single()
+            assertEquals(voice.id, restored.id)
+            assertEquals(voice.manifest.modelSha256, restored.manifest.modelSha256)
+
+            // The restored voice still speaks.
+            val piper = PiperVoice(restored)
+            try {
+                assertTrue(piper.synthesize("Hello again.", 1.0f).durationMs > 300)
+            } finally {
+                piper.release()
+            }
         } finally {
-            piper.release()
+            backup.delete()
+            voices.deleteAll()
+            repo.eraseAll()
         }
-        voices.deleteAll()
-        repo.eraseAll()
     }
 }

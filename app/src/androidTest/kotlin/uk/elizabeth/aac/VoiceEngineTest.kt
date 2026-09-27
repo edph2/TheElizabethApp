@@ -3,6 +3,7 @@ package uk.elizabeth.aac
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -21,6 +22,9 @@ import kotlin.math.sqrt
 class VoiceEngineTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val models = VoiceModels(instrumentation.targetContext)
+
+    @Before
+    fun startClean() = models.deleteAll()
 
     @After
     fun cleanUp() = models.deleteAll()
