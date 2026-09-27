@@ -21,10 +21,31 @@ android {
 
         // Real tablets only: keeps the on-device speech engine (native code) out of the APK for other CPUs.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Release signing. The key is never in the repository: it is supplied by environment
+    // variables (from GitHub secrets in .github/workflows/release.yml). See docs/RELEASE.md.
+    val keystore = System.getenv("ELIZABETH_KEYSTORE")
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("ELIZABETH_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ELIZABETH_KEY_ALIAS")
+                keyPassword = System.getenv("ELIZABETH_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            // Also x86_64, so instrumented tests (including real speech synthesis) run on a PC emulator.
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+        }
         release {
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -93,4 +114,12 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

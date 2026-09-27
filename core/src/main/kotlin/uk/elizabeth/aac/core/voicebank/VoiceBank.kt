@@ -71,6 +71,15 @@ data class VoiceBank(
         return null
     }
 
+    /**
+     * True if a voice was made from recordings given under this bank's consent (same speaker,
+     * same moment of consent). Used to remove such voices when consent is withdrawn.
+     */
+    fun isSourceOf(voiceConsent: VoiceConsent?): Boolean {
+        val mine = consent ?: return false
+        return voiceConsent != null && voiceConsent.timeMillis == mine.timeMillis && voiceConsent.speakerName == mine.speakerName
+    }
+
     fun addPrompt(text: String): VoiceBank {
         val clean = text.trim().replace(Regex("\\s+"), " ")
         return if (clean.isEmpty()) this else copy(extraPrompts = extraPrompts + clean)

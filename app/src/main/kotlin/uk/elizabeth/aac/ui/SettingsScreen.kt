@@ -35,6 +35,7 @@ import uk.elizabeth.aac.Screen
 import uk.elizabeth.aac.UiState
 import uk.elizabeth.aac.core.keyguard.Keyguard
 import uk.elizabeth.aac.core.model.KeyboardLayout
+import uk.elizabeth.aac.core.print.PaperBoard
 import uk.elizabeth.aac.core.scan.ScanMode
 import uk.elizabeth.aac.core.touch.TouchAdvisor
 import uk.elizabeth.aac.core.voice.VoiceManifest
@@ -262,6 +263,28 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, cont
                             vm.showNotice("This speech engine cannot install voices from here.")
                         }
                     }) { Text("Install voices") }
+                }
+            }
+
+            Section("Always available") {
+                var homeMode by remember { mutableStateOf(HomeScreenMode.isEnabled(context)) }
+                SettingSwitch(
+                    "Use as the tablet's home screen", homeMode,
+                    help = "The app opens when the tablet starts or Home is pressed, and Android brings it straight back if it " +
+                        "ever crashes. After switching on, choose this app as the home app. Switch off here to return to normal.",
+                ) { v ->
+                    runCatching { HomeScreenMode.setEnabled(context, v) }
+                        .onFailure { vm.showNotice("Could not open the home screen settings. Choose the home app in Android Settings → Apps.") }
+                    homeMode = HomeScreenMode.isEnabled(context)
+                }
+                Text("Paper board", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "A printed board with her phrases and the alphabet, for when the tablet is flat or out of reach. " +
+                        "Print it, or save it as a PDF, again whenever the phrases change.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Button(onClick = { PaperBoardPrinter.print(context, PaperBoard.html(state.data.board, s.keyboardLayout)) }) {
+                    Text("Print paper board")
                 }
             }
 

@@ -107,12 +107,14 @@ private fun App(vm: AppViewModel) {
 
             if (askPin) {
                 PinDialog("Carer PIN", error = pinError, onSubmit = { pin ->
-                    if (vm.checkPin(pin)) {
-                        askPin = false
-                        pinError = null
-                        vm.openScreen(Screen.SETTINGS)
-                    } else {
-                        pinError = "That PIN is not right"
+                    when (val result = vm.checkPin(pin)) {
+                        PinResult.Ok -> {
+                            askPin = false
+                            pinError = null
+                            vm.openScreen(Screen.SETTINGS)
+                        }
+                        PinResult.Wrong -> pinError = "That PIN is not right"
+                        is PinResult.Locked -> pinError = "Too many wrong PINs. Try again in ${result.seconds} seconds."
                     }
                 }, onDismiss = { askPin = false; pinError = null })
             }

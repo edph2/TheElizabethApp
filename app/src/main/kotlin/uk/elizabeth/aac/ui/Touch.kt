@@ -209,9 +209,10 @@ fun TouchSurface(controller: TouchController, modifier: Modifier = Modifier, con
             .onGloballyPositioned { controller.origin = it.positionInRoot() }
             .pointerInput(controller) {
                 awaitEachGesture {
+                    // Event times share SystemClock.uptimeMillis()'s clock, which the dwell ticks use.
                     val first = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     first.consume()
-                    controller.down(first.position, SystemClock.uptimeMillis())
+                    controller.down(first.position, first.uptimeMillis)
                     while (true) {
                         // Wake regularly even without movement, so dwell selection can complete.
                         val event = withTimeoutOrNull(40L) { awaitPointerEvent(PointerEventPass.Initial) }
@@ -226,10 +227,10 @@ fun TouchSurface(controller: TouchController, modifier: Modifier = Modifier, con
                             break
                         }
                         if (!change.pressed) {
-                            controller.up(change.position, SystemClock.uptimeMillis())
+                            controller.up(change.position, change.uptimeMillis)
                             break
                         }
-                        controller.move(change.position, SystemClock.uptimeMillis())
+                        controller.move(change.position, change.uptimeMillis)
                     }
                 }
             },

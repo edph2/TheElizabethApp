@@ -5,12 +5,14 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import uk.elizabeth.aac.audio.AudioPlayer
 import uk.elizabeth.aac.audio.VoiceRecorder
@@ -29,6 +31,7 @@ import uk.elizabeth.aac.core.predict.WordPredictor
 import uk.elizabeth.aac.core.privacy.PinHasher
 import uk.elizabeth.aac.core.privacy.PrivacyEventType
 import uk.elizabeth.aac.core.text.MessageEditor
+import uk.elizabeth.aac.core.text.Sentences
 import uk.elizabeth.aac.core.touch.Suggestion
 import uk.elizabeth.aac.core.touch.TouchAdvisor
 import uk.elizabeth.aac.core.touch.TouchEvent
@@ -42,6 +45,7 @@ import uk.elizabeth.aac.speech.PiperVoice
 import uk.elizabeth.aac.speech.Speaker
 import uk.elizabeth.aac.speech.VoiceModels
 import java.util.UUID
+import kotlin.coroutines.resume
 
 enum class Screen { MAIN, SETTINGS, PHRASES, PRIVACY, VOICE_BANK }
 
@@ -55,6 +59,12 @@ object Tabs {
 sealed interface RecordTarget {
     data class ForPhrase(val phraseId: String) : RecordTarget
     data class ForPrompt(val promptIndex: Int) : RecordTarget
+}
+
+sealed interface PinResult {
+    data object Ok : PinResult
+    data object Wrong : PinResult
+    data class Locked(val seconds: Long) : PinResult
 }
 
 /** A recording waiting to be kept or discarded. */
@@ -195,6 +205,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun say(phrase: Phrase) {
         val recordingId = phrase.recordingId
         if (recordingId == null) return sayText(phrase.text)
+        synthesis?.cancel()
         viewModelScope.launch {
             val audio = repository.loadRecording(recordingId)?.let { runCatching { Wav.decode(it) }.getOrNull() }
             if (audio != null) {
@@ -222,17 +233,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (!speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
             return
         }
-        // Her own (or another installed) voice, synthesised on the tablet.
+        // Her own (or another installed) voice, synthesised on the tablet. Sentence by sentence,
+        // so she is heard as soon as the first sentence is ready rather than after the whole message.
+        val rate = settings.speech.rate
         synthesis = viewModelScope.launch {
             _state.update { it.copy(customSpeaking = true) }
-            val audio = runCatching { withContext(Dispatchers.Default) { voice.synthesize(text, settings.speech.rate) } }.getOrNull()
-            if (audio != null && audio.samples.isNotEmpty()) {
-                player.play(audio) { _state.update { it.copy(customSpeaking = false) } }
-            } else {
+            val queue = Channel<PcmAudio>(capacity = 1)
+            launch(Dispatchers.Default) {
+                try {
+                    for (sentence in Sentences.split(text)) queue.send(voice.synthesize(sentence, rate))
+                    queue.close()
+                } catch (e: CancellationException) {
+                    queue.close()
+                    throw e
+                } catch (e: Exception) {
+                    queue.close(e)
+                }
+            }
+            var played = false
+            try {
+                for (audio in queue) {
+                    if (audio.samples.isEmpty()) continue
+                    playAndWait(audio)
+                    played = true
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (!played && !speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
+            } finally {
                 _state.update { it.copy(customSpeaking = false) }
-                if (!speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
             }
         }
+    }
+
+    private suspend fun playAndWait(audio: PcmAudio) = suspendCancellableCoroutine { cont ->
+        cont.invokeOnCancellation { player.stop() }
+        player.play(audio) { if (cont.isActive) cont.resume(Unit) }
     }
 
     // ---- Voices ----
@@ -332,7 +369,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun needsPin(): Boolean = settings.carerPinHash != null
 
-    fun checkPin(pin: String): Boolean = settings.carerPinHash?.let { PinHasher.verify(pin, it) } ?: true
+    /**
+     * Checks the carer PIN. Repeated wrong PINs lock entry for a growing time, and the lock
+     * survives restarting the app.
+     */
+    fun checkPin(pin: String): PinResult {
+        val hash = settings.carerPinHash ?: return PinResult.Ok
+        val guard = _state.value.data.pinGuard
+        val time = now()
+        if (guard.isLocked(time)) return PinResult.Locked(guard.secondsLeft(time))
+        val ok = PinHasher.verify(pin, hash)
+        val next = if (ok) guard.afterSuccess() else guard.afterFailure(time)
+        updateData { it.copy(pinGuard = next) }
+        return when {
+            ok -> PinResult.Ok
+            next.isLocked(time) -> PinResult.Locked(next.secondsLeft(time))
+            else -> PinResult.Wrong
+        }
+    }
 
     fun setPin(pin: String?) {
         val hash = pin?.takeIf { it.length >= 4 }?.let { PinHasher.hash(it) }
@@ -484,14 +538,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Withdraws consent: deletes every voice banking recording and the consent itself. */
+    /** Withdraws consent: deletes the recordings, the consent, and any voice on this tablet made from them. */
     fun withdrawVoiceConsent() {
+        val bank = _state.value.data.voiceBank
         viewModelScope.launch {
             repository.deleteAllVoiceTakes()
-            updateData {
-                it.copy(voiceBank = VoiceBank(), privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_CONSENT_WITHDRAWN, now()))
+            val madeFromThem = withContext(Dispatchers.IO) { voiceModels.list().filter { bank.isSourceOf(it.manifest.consent) } }
+            if (madeFromThem.any { it.id == settings.speech.customVoiceId }) {
+                updateSettings { it.copy(speech = it.speech.copy(customVoiceId = null)) }
             }
+            withContext(Dispatchers.IO) { madeFromThem.forEach { voiceModels.delete(it.id) } }
+            updateData { d ->
+                var log = d.privacyLog.append(PrivacyEventType.VOICE_CONSENT_WITHDRAWN, now())
+                madeFromThem.forEach { log = log.append(PrivacyEventType.VOICE_MODEL_REMOVED, now()) }
+                d.copy(voiceBank = VoiceBank(), privacyLog = log)
+            }
+            refreshVoices()
             _state.update { it.copy(promptIndex = 0) }
-            notify("Voice banking recordings deleted")
+            notify(
+                "Voice banking recordings deleted" +
+                    if (madeFromThem.isEmpty()) "." else ", and ${madeFromThem.size} voice(s) made from them removed from this tablet.",
+            )
         }
     }
 

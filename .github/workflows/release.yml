@@ -1,0 +1,64 @@
+# Builds a signed release APK for installing on her tablet. Run it from the Actions tab
+# ("Run workflow"). Needs the signing key in repository secrets; see docs/RELEASE.md.
+name: Release APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ELIZABETH_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::The ELIZABETH_KEYSTORE_BASE64 secret is not set. See docs/RELEASE.md." && exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Tests and signed release build
+        env:
+          ELIZABETH_KEYSTORE: ${{ runner.temp }}/release.jks
+          ELIZABETH_KEYSTORE_PASSWORD: ${{ secrets.ELIZABETH_KEYSTORE_PASSWORD }}
+          ELIZABETH_KEY_ALIAS: ${{ secrets.ELIZABETH_KEY_ALIAS }}
+          ELIZABETH_KEY_PASSWORD: ${{ secrets.ELIZABETH_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon :core:test :app:assembleRelease
+
+      - name: Check signature, debuggable flag and network permissions
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          bt="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$bt/apksigner" verify --print-certs "$apk"
+          if "$bt/aapt2" dump badging "$apk" | grep -q "application-debuggable"; then
+            echo "::error::Release APK is debuggable" && exit 1
+          fi
+          tools/check_no_network.sh "$apk"
+          sha256sum "$apk" | tee app-release.apk.sha256
+
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elizabeth-release-apk
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app-release.apk.sha256

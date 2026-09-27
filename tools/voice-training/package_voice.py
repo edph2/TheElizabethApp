@@ -157,6 +157,7 @@ def main() -> int:
     p.add_argument("--licence", help="licence of a published voice")
     p.add_argument("--name", help="display name")
     p.add_argument("--out", required=True)
+    p.add_argument("--passphrase-env", help="read the passphrase from this environment variable (for automated tests)")
     args = p.parse_args()
 
     with tempfile.TemporaryDirectory() as work:
@@ -169,9 +170,12 @@ def main() -> int:
             parts = prepare_trained(args, work)
         package = build_package(*parts)
 
-    passphrase = getpass.getpass("Passphrase for the voice file (at least 8 characters): ")
-    if passphrase != getpass.getpass("Type it again: "):
-        raise SystemExit("The passphrases do not match")
+    if args.passphrase_env:
+        passphrase = os.environ[args.passphrase_env]
+    else:
+        passphrase = getpass.getpass("Passphrase for the voice file (at least 8 characters): ")
+        if passphrase != getpass.getpass("Type it again: "):
+            raise SystemExit("The passphrases do not match")
     with open(args.out, "wb") as out:
         encrypt_stream(io.BytesIO(package), out, passphrase)
     print(f"Wrote {args.out}. Copy it to the tablet and import it in Settings → Voice.")

@@ -221,7 +221,7 @@ private fun Recorder(state: UiState, bank: VoiceBank, vm: AppViewModel) {
         }
 
         Section("Withdraw consent") {
-            Text("Deletes every voice banking recording on this tablet. Copies already exported must be deleted separately.")
+            Text("Deletes every voice banking recording on this tablet, and any voice on this tablet made from them. Copies already exported must be deleted separately.")
             Button(
                 onClick = { confirmWithdraw = true },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),

@@ -55,3 +55,54 @@ jobs:
           path: |
             core/build/reports
             app/build/reports
+
+  device-tests:
+    # Runs the instrumented tests on an Android emulator: Keystore encryption, the
+    # no-network guarantee, export/restore, the main screen, and real on-device speech
+    # with a published Piper voice packaged by tools/voice-training/package_voice.py.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Package a published voice for the end-to-end speech test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEST_VOICE_PASSPHRASE: correct horse battery
+        run: |
+          pip install cryptography onnx
+          gh release download tts-models -R k2-fsa/sherpa-onnx -p 'vits-piper-en_GB-alba-medium.tar.bz2'
+          tar xjf vits-piper-en_GB-alba-medium.tar.bz2
+          mkdir -p app/src/androidTest/assets
+          python3 tools/voice-training/package_voice.py --sherpa-dir vits-piper-en_GB-alba-medium \
+            --licence "test only (see MODEL_CARD)" --passphrase-env TEST_VOICE_PASSPHRASE \
+            --out app/src/androidTest/assets/test.elizvoice
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Instrumented tests on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
+
+      - name: Upload device test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-test-reports
+          path: app/build/reports/androidTests

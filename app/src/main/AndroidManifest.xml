@@ -43,5 +43,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Off unless a carer turns on "Use as the tablet's home screen" in Settings. Then the
+            app opens when the tablet starts or Home is pressed, and Android brings it straight
+            back if it ever crashes, so she is never left without her voice.
+        -->
+        <activity-alias
+            android:name=".HomeScreen"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
     </application>
 </manifest>

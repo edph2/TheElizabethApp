@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import uk.elizabeth.aac.core.model.AppSettings
 import uk.elizabeth.aac.core.model.History
 import uk.elizabeth.aac.core.model.PhraseBoard
+import uk.elizabeth.aac.core.privacy.PinGuard
 import uk.elizabeth.aac.core.privacy.PrivacyLog
 import uk.elizabeth.aac.core.touch.TouchStats
 import uk.elizabeth.aac.core.voicebank.VoiceBank
@@ -19,6 +20,7 @@ data class AppData(
     val privacyLog: PrivacyLog = PrivacyLog(),
     val voiceBank: VoiceBank = VoiceBank(),
     val touchStats: TouchStats = TouchStats(),
+    val pinGuard: PinGuard = PinGuard(),
 ) {
     fun toJson(): String = json.encodeToString(serializer(), this)
 
