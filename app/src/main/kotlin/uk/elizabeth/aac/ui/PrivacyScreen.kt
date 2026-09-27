@@ -67,6 +67,7 @@ fun PrivacyScreen(state: UiState, vm: AppViewModel) {
             Section("What the app knows") {
                 Text("• ${data.board.allPhrases().size} phrases in ${data.board.categories.size} categories")
                 Text("• $recordings phrases recorded in her voice")
+                Text("• ${data.voiceBank.takes.size} voice banking recordings" + (data.voiceBank.consent?.let { " (voice of ${it.speakerName}, consent recorded)" } ?: ""))
                 Text("• ${data.history.entries.size} messages in history" + if (!s.historyEnabled) " (history is switched off)" else "")
                 Text("• ${state.learnedWords.size} words learned for prediction" + if (!s.learningEnabled) " (learning is switched off)" else "")
                 Text("• ${data.privacyLog.events.size} entries in the privacy log")

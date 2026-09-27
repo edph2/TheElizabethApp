@@ -43,6 +43,7 @@ import uk.elizabeth.aac.ui.PrivacyScreen
 import uk.elizabeth.aac.ui.SettingsScreen
 import uk.elizabeth.aac.ui.TouchController
 import uk.elizabeth.aac.ui.TouchSurface
+import uk.elizabeth.aac.ui.VoiceBankScreen
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -78,6 +79,7 @@ private fun App(vm: AppViewModel) {
                 Screen.SETTINGS -> SettingsScreen(state, speaker, vm)
                 Screen.PHRASES -> PhraseEditorScreen(state, vm)
                 Screen.PRIVACY -> PrivacyScreen(state, vm)
+                Screen.VOICE_BANK -> VoiceBankScreen(state, vm)
             }
             BackHandler(enabled = state.screen != Screen.MAIN) {
                 vm.openScreen(if (state.screen == Screen.SETTINGS) Screen.MAIN else Screen.SETTINGS)

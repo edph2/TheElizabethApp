@@ -19,7 +19,6 @@ import uk.elizabeth.aac.core.audio.QualityReport
 import uk.elizabeth.aac.core.audio.RecordingQuality
 import uk.elizabeth.aac.core.audio.Wav
 import uk.elizabeth.aac.core.data.AppData
-import uk.elizabeth.aac.core.data.BackupContents
 import uk.elizabeth.aac.core.data.WrongPassphraseException
 import uk.elizabeth.aac.core.model.AppSettings
 import uk.elizabeth.aac.core.model.Phrase
@@ -28,11 +27,14 @@ import uk.elizabeth.aac.core.predict.WordPredictor
 import uk.elizabeth.aac.core.privacy.PinHasher
 import uk.elizabeth.aac.core.privacy.PrivacyEventType
 import uk.elizabeth.aac.core.text.MessageEditor
+import uk.elizabeth.aac.core.voicebank.VoiceBank
+import uk.elizabeth.aac.core.voicebank.VoiceConsent
+import uk.elizabeth.aac.core.voicebank.VoiceTake
 import uk.elizabeth.aac.data.Repository
 import uk.elizabeth.aac.speech.Speaker
 import java.util.UUID
 
-enum class Screen { MAIN, SETTINGS, PHRASES, PRIVACY }
+enum class Screen { MAIN, SETTINGS, PHRASES, PRIVACY, VOICE_BANK }
 
 /** Tabs on the main screen: a phrase category, recent messages, or the keyboard. */
 object Tabs {
@@ -40,8 +42,14 @@ object Tabs {
     const val KEYBOARD = "tab-keyboard"
 }
 
-/** A recording waiting for a carer to keep or discard it. */
-data class PendingRecording(val phraseId: String, val audio: PcmAudio, val quality: QualityReport)
+/** What a recording is for: a phrase button (message banking) or a voice banking sentence. */
+sealed interface RecordTarget {
+    data class ForPhrase(val phraseId: String) : RecordTarget
+    data class ForPrompt(val promptIndex: Int) : RecordTarget
+}
+
+/** A recording waiting to be kept or discarded. */
+data class PendingRecording(val target: RecordTarget, val audio: PcmAudio, val quality: QualityReport)
 
 data class UiState(
     val loaded: Boolean = false,
@@ -61,9 +69,11 @@ data class UiState(
     /** A short message for the carer, e.g. "Export saved". */
     val notice: String? = null,
     val learnedWords: List<Pair<String, Int>> = emptyList(),
-    val recordingPhraseId: String? = null,
+    val recordingTarget: RecordTarget? = null,
     val recordingLevel: Float = 0f,
     val pendingRecording: PendingRecording? = null,
+    /** The voice banking sentence currently shown. */
+    val promptIndex: Int = 0,
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -74,6 +84,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val editor = MessageEditor()
     private val predictor = WordPredictor(WordPredictor.loadSeedWords())
     private val chime = Chime.generate()
+
+    /** The voice banking script: the bundled sentences plus any the family added. */
+    private val script = VoiceBank.loadScript()
+    fun voicePrompts(): List<String> = _state.value.data.voiceBank.prompts(script)
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
@@ -259,15 +273,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { deleteUnusedRecordings() }
     }
 
-    fun startRecording(phraseId: String) {
-        if (_state.value.recordingPhraseId != null) return
-        _state.update { it.copy(recordingPhraseId = phraseId, recordingLevel = 0f, pendingRecording = null) }
+    fun startRecording(target: RecordTarget) {
+        if (_state.value.recordingTarget != null) return
+        player.stop()
+        _state.update { it.copy(recordingTarget = target, recordingLevel = 0f, pendingRecording = null) }
         viewModelScope.launch {
             val result = runCatching { recorder.record { level -> _state.update { it.copy(recordingLevel = level) } } }
-            _state.update { it.copy(recordingPhraseId = null, recordingLevel = 0f) }
+            _state.update { it.copy(recordingTarget = null, recordingLevel = 0f) }
             result.onSuccess { raw ->
                 val audio = RecordingQuality.trimSilence(raw)
-                _state.update { it.copy(pendingRecording = PendingRecording(phraseId, audio, RecordingQuality.check(raw))) }
+                _state.update { it.copy(pendingRecording = PendingRecording(target, audio, RecordingQuality.check(raw))) }
             }.onFailure { e -> _state.update { it.copy(notice = "Recording failed: ${e.message}") } }
         }
     }
@@ -282,17 +297,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun keepPending() {
         val pending = _state.value.pendingRecording ?: return
+        _state.update { it.copy(pendingRecording = null) }
         val id = UUID.randomUUID().toString()
+        val wav = Wav.encode(pending.audio)
         viewModelScope.launch {
-            repository.saveRecording(id, Wav.encode(pending.audio))
-            updateData {
-                it.copy(
-                    board = it.board.updatePhrase(pending.phraseId) { p -> p.copy(recordingId = id) },
-                    privacyLog = it.privacyLog.append(PrivacyEventType.RECORDING_ADDED, now()),
-                )
+            when (val target = pending.target) {
+                is RecordTarget.ForPhrase -> {
+                    repository.saveRecording(id, wav)
+                    updateData {
+                        it.copy(
+                            board = it.board.updatePhrase(target.phraseId) { p -> p.copy(recordingId = id) },
+                            privacyLog = it.privacyLog.append(PrivacyEventType.RECORDING_ADDED, now()),
+                        )
+                    }
+                    deleteUnusedRecordings()
+                }
+                is RecordTarget.ForPrompt -> {
+                    repository.saveVoiceTake(id, wav)
+                    val replaced = _state.value.data.voiceBank.takeFor(target.promptIndex)
+                    val take = VoiceTake(target.promptIndex, id, pending.audio.durationMs, pending.quality.isGood, now())
+                    updateData { it.copy(voiceBank = it.voiceBank.withTake(take)) }
+                    replaced?.let { repository.deleteVoiceTake(it.recordingId) }
+                    // Move straight on to the next sentence still to record.
+                    val next = _state.value.data.voiceBank.nextUnrecorded(target.promptIndex + 1, voicePrompts().size)
+                    if (next != null) _state.update { it.copy(promptIndex = next) }
+                }
             }
-            _state.update { it.copy(pendingRecording = null) }
-            deleteUnusedRecordings()
         }
     }
 
@@ -318,6 +348,74 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun deleteUnusedRecordings() {
         val unused = _state.value.data.board.unusedRecordings(repository.recordingIds())
         unused.forEach { repository.deleteRecording(it) }
+    }
+
+    // ---- Voice banking ----
+
+    fun recordVoiceConsent(speakerName: String, isSelf: Boolean) {
+        val name = speakerName.trim()
+        if (name.isEmpty()) return
+        val consent = VoiceConsent(name, isSelf, VoiceConsent.statementFor(name, isSelf), now())
+        updateData {
+            it.copy(
+                voiceBank = it.voiceBank.copy(consent = consent),
+                privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_CONSENT_RECORDED, now()),
+            )
+        }
+        val first = _state.value.data.voiceBank.nextUnrecorded(0, voicePrompts().size) ?: 0
+        _state.update { it.copy(promptIndex = first) }
+    }
+
+    /** Withdraws consent: deletes every voice banking recording and the consent itself. */
+    fun withdrawVoiceConsent() {
+        viewModelScope.launch {
+            repository.deleteAllVoiceTakes()
+            updateData {
+                it.copy(voiceBank = VoiceBank(), privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_CONSENT_WITHDRAWN, now()))
+            }
+            _state.update { it.copy(promptIndex = 0) }
+            notify("Voice banking recordings deleted")
+        }
+    }
+
+    fun goToPrompt(index: Int) {
+        val count = voicePrompts().size
+        if (count > 0) _state.update { it.copy(promptIndex = index.mod(count), pendingRecording = null) }
+    }
+
+    fun goToNextUnrecorded() {
+        val next = _state.value.data.voiceBank.nextUnrecorded(_state.value.promptIndex + 1, voicePrompts().size)
+        if (next != null) goToPrompt(next) else notify("Every sentence has been recorded")
+    }
+
+    fun addVoicePrompt(text: String) = updateData { it.copy(voiceBank = it.voiceBank.addPrompt(text)) }
+
+    fun playTake(promptIndex: Int) {
+        val take = _state.value.data.voiceBank.takeFor(promptIndex) ?: return
+        viewModelScope.launch {
+            val audio = repository.loadVoiceTake(take.recordingId)?.let { runCatching { Wav.decode(it) }.getOrNull() }
+            if (audio != null) player.play(audio) else notify("The recording could not be read.")
+        }
+    }
+
+    fun deleteTake(promptIndex: Int) {
+        val take = _state.value.data.voiceBank.takeFor(promptIndex) ?: return
+        updateData { it.copy(voiceBank = it.voiceBank.withoutTake(promptIndex)) }
+        viewModelScope.launch { repository.deleteVoiceTake(take.recordingId) }
+    }
+
+    fun exportTrainingData(uri: Uri, passphrase: CharArray) {
+        val bank = _state.value.data.voiceBank
+        viewModelScope.launch {
+            runCatching {
+                val out = openOutput(uri)
+                repository.exportTrainingData(out, bank, voicePrompts(), passphrase, now())
+            }.onSuccess { count ->
+                updateData { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_TRAINING_DATA_EXPORTED, now(), "$count recordings")) }
+                notify("Exported $count recordings for voice training. Keep the file and passphrase safe.")
+            }.onFailure { e -> notify("Export failed: ${e.message}") }
+            passphrase.fill(' ')
+        }
     }
 
     // ---- Privacy: see, export, erase ----
@@ -365,8 +463,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun exportTo(uri: Uri, passphrase: CharArray) {
         viewModelScope.launch {
             runCatching {
-                val bytes = repository.exportBackup(_state.value.data, predictor.export(), passphrase)
-                writeUri(uri, bytes)
+                repository.exportBackup(openOutput(uri), _state.value.data, predictor.export(), passphrase)
             }.onSuccess {
                 updateData { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.DATA_EXPORTED, now())) }
                 notify("Export saved. Keep the passphrase safe: without it the file cannot be opened.")
@@ -377,15 +474,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importFrom(uri: Uri, passphrase: CharArray) {
         viewModelScope.launch {
+            val log = _state.value.data.privacyLog
             runCatching {
-                val contents: BackupContents = repository.openBackup(readUri(uri), passphrase)
-                val imported = AppData.fromJson(contents.appDataJson)
-                val data = imported.copy(privacyLog = _state.value.data.privacyLog.append(PrivacyEventType.DATA_RESTORED, now()))
-                repository.restore(contents, data)
-                predictor.import(contents.wordModel)
-                data
-            }.onSuccess { data ->
-                _state.update { it.copy(data = data, tab = data.board.categories.firstOrNull()?.id ?: Tabs.KEYBOARD, page = 0) }
+                val resolver = getApplication<Application>().contentResolver
+                repository.restoreBackup({ resolver.openInputStream(uri) ?: error("Could not open the file") }, passphrase)
+            }.onSuccess { result ->
+                // Keep this tablet's privacy log and record the restore in it.
+                val data = result.data.copy(privacyLog = log.append(PrivacyEventType.DATA_RESTORED, now()))
+                predictor.import(result.wordModel)
+                _state.update { it.copy(data = data, tab = data.board.categories.firstOrNull()?.id ?: Tabs.KEYBOARD, page = 0, promptIndex = 0) }
+                saveData.trySend(Unit)
                 speaker.configure(data.settings.speech)
                 refreshText()
                 notify("Data restored")
@@ -396,14 +494,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun writeUri(uri: Uri, bytes: ByteArray) = withContext(Dispatchers.IO) {
-        getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) }
-            ?: error("Could not open the file")
-    }
-
-    private suspend fun readUri(uri: Uri): ByteArray = withContext(Dispatchers.IO) {
-        getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: error("Could not open the file")
+    private suspend fun openOutput(uri: Uri) = withContext(Dispatchers.IO) {
+        getApplication<Application>().contentResolver.openOutputStream(uri, "wt") ?: error("Could not open the file")
     }
 
     // ---- Helpers ----

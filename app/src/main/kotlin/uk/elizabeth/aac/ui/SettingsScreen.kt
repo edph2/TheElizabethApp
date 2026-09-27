@@ -45,6 +45,7 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = { vm.openScreen(Screen.PHRASES) }) { Text("Edit phrases and recordings") }
+                Button(onClick = { vm.openScreen(Screen.VOICE_BANK) }) { Text("Voice banking") }
                 Button(onClick = { vm.openScreen(Screen.PRIVACY) }) { Text("Privacy and data") }
             }
 

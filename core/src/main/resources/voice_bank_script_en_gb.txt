@@ -1,0 +1,318 @@
+# Voice banking script, British English. One sentence per line; lines starting with # are ignored.
+# Written for this project (no copyrighted text), covering the sounds of English in natural
+# everyday sentences, questions, exclamations, numbers and names. Read naturally, as if
+# talking to someone in the room, not as if reading aloud.
+Good morning. Did you sleep well?
+Could you put the kettle on, please?
+I'd love a cup of tea with a splash of milk.
+Thank you, that's very kind of you.
+Would you mind opening the window a little?
+It's rather chilly in here this evening.
+The garden looks beautiful in the sunshine.
+Have you heard the news about the weather?
+They say it will rain later this afternoon.
+I think I'll have soup and a sandwich for lunch.
+Please don't worry about me, I'm quite comfortable.
+What time is the doctor coming tomorrow?
+Could you pass me my glasses from the table?
+I can't quite reach the remote control.
+Let's watch something cheerful on the television.
+My favourite programme starts at eight o'clock.
+Is there any post for me today?
+I'd like to write a birthday card for my grandson.
+Happy birthday, darling! I hope you have a wonderful day.
+Merry Christmas to all of you.
+Oh, how lovely to see you!
+Come in and sit down, you must be tired.
+How was the journey? Was the traffic dreadful?
+I'm so proud of you, you know.
+Tell me everything that's been happening.
+That's the funniest thing I've heard all week.
+No, no, that's not what I meant at all.
+Yes, please. That would be perfect.
+I'm not hungry just now, maybe later.
+I'd rather stay in bed a bit longer this morning.
+Could you help me sit up, please?
+My back is aching again today.
+The pain is worse on the left side.
+It hurts when I move my shoulder.
+I feel a little dizzy when I stand up.
+Please be gentle, my skin is very sore.
+Could you fetch a blanket? My feet are freezing.
+I need to go to the toilet, please.
+Would you ring my daughter for me?
+Ask her to call back when she's free.
+I've been thinking about the old days.
+We used to walk along the beach every Sunday.
+Your grandfather loved fishing more than anything.
+The house was always full of music and laughter.
+I remember the day you were born as if it were yesterday.
+We didn't have much money, but we were happy.
+Don't forget to feed the cat before you go.
+Where did I leave my handbag?
+It should be on the hook behind the door.
+Please turn the radio down a little.
+Turn the light off when you leave, would you?
+Goodnight, sleep tight. See you in the morning.
+Take care driving home, it's getting dark.
+Text me when you get back safely.
+The quick brown fox jumps over the lazy dog.
+She sells seashells on the seashore.
+A big black bug bit a big black bear.
+Red lorry, yellow lorry.
+Which witch wished for the wicked wand?
+Thirty-three thousand feathers on a thrush's throat.
+The sixth sheikh's sixth sheep is sick.
+Peter picked a peck of pickled peppers.
+Unique New York, you know you need unique New York.
+How much wood would a woodchuck chuck?
+The judge gave a brief but fair verdict.
+A cheerful chap chose cheese and chutney.
+Measure the treasure with pleasure and leisure.
+Although it was rough, they said it was enough.
+The thought of the thorny thicket was thrilling.
+Their father gathered the feathers together.
+Whether the weather is warm or cold, we'll go.
+Should the shoe shop shut early on Thursday?
+The azure sky shimmered over the harbour.
+Joyful voices echoed through the old church.
+The choir sang a rousing hymn at the end.
+Our neighbour's dog barks at every passing bicycle.
+I bought a loaf of bread, a pint of milk and some eggs.
+Rhubarb crumble with custard is my weakness.
+There's nothing quite like fish and chips by the sea.
+The children built an enormous sandcastle.
+A gentle breeze drifted in from the orchard.
+We queued for ages outside the theatre.
+The vicar's wife organised a jumble sale.
+My husband's garage was full of junk.
+The heating engineer is coming on Wednesday.
+The oven timer beeped just as the phone rang.
+Please measure a teaspoon of sugar into the jug.
+The umbrella blew inside out in the gale.
+It's a genuine pleasure to meet you.
+Four, five, six, seven, eight, nine, ten.
+Eleven, twelve, thirteen, fourteen, fifteen.
+Twenty, thirty, forty, fifty, sixty, seventy.
+Eighty, ninety, a hundred, a thousand.
+My appointment is at half past two on Tuesday.
+The bus leaves at quarter to nine.
+It cost twelve pounds and fifty pence.
+I was born in nineteen forty-eight.
+Our phone number used to be three, one, four, two.
+Monday, Tuesday, Wednesday, Thursday, Friday.
+Saturday and Sunday are my favourite days.
+January, February, March, April, May, June.
+July, August, September, October, November, December.
+The first of the month is always busy.
+Spring, summer, autumn and winter.
+What would you like for dinner tonight?
+Where are you going on holiday this year?
+Who was that on the phone just now?
+Why didn't you tell me sooner?
+When will the results come back?
+How long will it take to get there?
+Is it really that late already?
+Are you sure you don't want another biscuit?
+Can you hear me clearly?
+Did you remember to lock the back door?
+Shall we have a look at the photographs?
+Wasn't that a wonderful film?
+Isn't the baby adorable?
+Oh dear, what a shame.
+Goodness gracious, look at the time!
+Well done! I knew you could do it.
+Hooray, we won!
+Oh, for heaven's sake.
+Hmm, let me think about that for a moment.
+Really? I had no idea.
+Absolutely not. I won't hear of it.
+Of course, whatever you think is best.
+I'm terribly sorry, I didn't catch that.
+Could you say that again a little more slowly?
+Please be patient with me, it takes me a while.
+I know exactly what I want to say.
+My mind is as sharp as ever.
+I'm using this tablet to help me talk.
+This is my voice, recorded while I could still speak.
+I love you all very much.
+You mean the world to me.
+Thank you for looking after me so well.
+I couldn't manage without you.
+Don't be sad, we've had a wonderful life.
+Give my love to everyone at home.
+I'm tired now, I'd like to rest.
+Let's talk again tomorrow.
+Could you read to me for a while?
+I'd like to listen to some classical music.
+Put the kettle on and we'll have a proper chat.
+The nurse said my blood pressure was fine.
+The tablets make me feel a bit sleepy.
+I haven't had my medicine yet this morning.
+Please call the doctor, I don't feel right.
+I'm having trouble breathing.
+I'm having trouble swallowing.
+Something is wrong, please get help.
+Stop, please stop, that hurts.
+That's much better, thank you.
+Can you move the pillow under my arm?
+Lift my legs up onto the footstool, please.
+Could you scratch my nose? It's itching.
+My mouth is dry, could I have some water?
+Just a small sip, please.
+Use the straw, it's easier for me.
+I'd like to wear the blue cardigan today.
+Could you brush my hair?
+I'd like to get dressed before the visitors arrive.
+Who is coming to see me today?
+Please tell them I'm looking forward to it.
+It was lovely to see you, come again soon.
+The flowers you brought are gorgeous.
+Put them in the vase by the window.
+Mind the step on your way out.
+Would you like to stay for supper?
+There's a casserole in the fridge.
+Heat it up for about twenty minutes.
+Help yourself to anything you like.
+Ask your mother whether she's coming at the weekend.
+We ought to book a table for Sunday lunch.
+Roast beef with Yorkshire pudding and gravy.
+I'm afraid I can't eat that any more.
+Could you cut it into smaller pieces?
+Mash the potatoes nice and smooth, please.
+That was delicious, my compliments to the chef.
+I'm full, I couldn't eat another thing.
+The washing machine is making a funny noise.
+The boiler needs its annual service.
+Someone's at the door, could you get it?
+If it's a salesman, tell him we're not interested.
+Please close the curtains, the sun is in my eyes.
+Leave the door open a crack.
+I'd like a bit of peace and quiet.
+Could you sit with me for a while?
+Hold my hand, would you?
+I'm a little frightened, to be honest.
+I'm feeling much more cheerful today.
+What a glorious morning!
+The birds have been singing since dawn.
+There's a robin on the bird table.
+The roses need dead-heading.
+Could you water the tomatoes in the greenhouse?
+The grass could do with a cut.
+Look at the size of that pumpkin!
+We had a marvellous harvest this year.
+Autumn leaves are piling up on the lawn.
+Frost on the windows this morning.
+I hope it snows for Christmas.
+The fireworks were spectacular last night.
+The church bells are ringing.
+Would you like a sherry before dinner?
+Cheers! Here's to good health.
+Congratulations on your engagement!
+Welcome to the family.
+I'm so sorry for your loss.
+She was a remarkable woman.
+He always made everyone laugh.
+You'll be fine, just be yourself.
+Good luck with the interview tomorrow.
+Remember to wrap up warm.
+Don't stay up too late.
+Mind how you go.
+Cheerio, see you next week.
+Thanks ever so much.
+You're very welcome.
+Not at all, it's my pleasure.
+Excuse me, could I ask you something?
+Pardon? I didn't quite hear.
+I beg your pardon, that's not right.
+Oh, I see what you mean now.
+Fair enough, you've got a point.
+I'm not so sure about that.
+Let's agree to disagree.
+Honestly, you're impossible sometimes!
+You're a treasure, you really are.
+What a load of nonsense.
+Pull the other one, it's got bells on.
+It's raining cats and dogs out there.
+Every cloud has a silver lining.
+Better late than never.
+There's no place like home.
+Actions speak louder than words.
+We'll cross that bridge when we come to it.
+The early bird catches the worm.
+Many hands make light work.
+Rome wasn't built in a day.
+Waste not, want not.
+The weather forecast predicts sunny spells and scattered showers.
+A thunderstorm rumbled across the valley.
+The ferry crossing was choppy but exciting.
+We stayed in a charming cottage in Cornwall.
+The Lake District is breathtaking in October.
+Edinburgh Castle towers above the city.
+We visited the cathedral in York.
+London was far too busy for my liking.
+I've always wanted to see the northern lights.
+The train to Manchester was delayed again.
+Grandad drove a little green van for years.
+Your uncle Jim was a terrible cook.
+Auntie Margaret knitted jumpers for everyone.
+Cousin Susan emigrated to Australia.
+The twins were always getting into mischief.
+Our wedding was on a sunny day in June.
+We danced until midnight.
+I wore my mother's pearl necklace.
+The photographs are in the drawer upstairs.
+Could you find the album with the red cover?
+That's me when I was about seven years old.
+Look how young we all were!
+The dog's name was Biscuit.
+We had a budgie called Joey.
+I was a teacher for thirty-two years.
+The pupils used to call me Mrs E.
+I still get letters from some of them.
+Reading has always been my great love.
+I've read that book three times.
+Could you find my crossword puzzle?
+Seven letters, meaning happiness.
+The answer is delight.
+Would you like to play a game of cards?
+It's your turn to shuffle.
+I think I've won again!
+Shall we do a jigsaw puzzle?
+Where does this corner piece go?
+Put the kettle on, it's time for a break.
+Is that the time? The afternoon has flown.
+Please charge the tablet before bed.
+The volume needs to be louder.
+Can everyone hear me at the back?
+Please wait, I'm typing my answer.
+Give me a moment, I'm nearly finished.
+I've changed my mind.
+Actually, forget I said that.
+Just a minute, I haven't finished.
+Let me finish what I was saying, please.
+Could you ask me yes or no questions?
+Yes.
+No.
+Maybe.
+I don't know.
+Please.
+Thank you.
+Sorry.
+Hello.
+Goodbye.
+Help!
+Wait.
+Stop.
+Again.
+More.
+Finished.
+Water.
+Tea.
+Toilet.
+Pain.
+Hot.
+Cold.
+Tired.
+Happy.
+Lovely.
