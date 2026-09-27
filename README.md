@@ -61,15 +61,37 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design and roadmap.
 - **Carer settings:** opened by holding the Settings button for 2 seconds, with an
   optional PIN.
 
-**Not tested on a tablet yet:** everything above builds and is covered by the
-core-logic, Python and lint checks in CI, but has not yet been used on a real tablet.
-Nor has a real Piper voice been trained and played through the app. See also
+**Resilience**
+- **Speech in installed voices starts after the first sentence** instead of the whole
+  message.
+- **Home-screen mode (optional):** the app comes back after a crash, a restart or a press
+  of Home.
+- **Paper board:** a printable board of her phrases and the alphabet, as a back-up.
+- **Carer PIN lockout:** after 5 wrong attempts, entry locks for a doubling period.
+
+**Not tested on a tablet yet:** everything above builds, passes the checks in CI, and
+runs in device tests on an Android emulator, including real speech from a published Piper
+voice. It has not yet been used on a real tablet, or by Elizabeth. No voice has yet been
+trained from real voice-banking recordings. See [docs/TESTING.md](docs/TESTING.md). See also
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): there is a licence decision to make
 before sharing the app outside the family.
 
+## Documents
+
+- [docs/DESIGN.md](docs/DESIGN.md): the design, and the regulatory map.
+- [docs/GUIDE.md](docs/GUIDE.md): a guide for Elizabeth, her family and carers,
+  including what the AI does.
+- [docs/DPIA.md](docs/DPIA.md): the Data Protection Impact Assessment (a draft for sign-off).
+- [docs/RELEASE.md](docs/RELEASE.md): signed release builds and installing on her tablet.
+- [docs/TESTING.md](docs/TESTING.md): the automated tests, and the checks people need to do.
+- [docs/DATA_EXPORT.md](docs/DATA_EXPORT.md): the export file formats.
+- [tools/voice-training/README.md](tools/voice-training/README.md): making her voice.
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): licences, including a decision to make.
+
 ## Install on the tablet
 
-Every CI run builds a debug APK. Download `elizabeth-debug-apk` from the latest successful
+For real use, install a **signed release build**; see [docs/RELEASE.md](docs/RELEASE.md).
+For trying it out, every CI run also builds a debug APK. Download `elizabeth-debug-apk` from the latest successful
 run on the repository's **Actions** tab. Copy it to the tablet, allow installing from that
 source, and open it.
 
