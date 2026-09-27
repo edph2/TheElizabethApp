@@ -1,6 +1,12 @@
 package uk.elizabeth.aac.ui
 
 import android.content.ActivityNotFoundException
+import android.content.Context
+import android.os.Build
+import android.util.DisplayMetrics
+import android.view.WindowManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import android.speech.tts.TextToSpeech
 import androidx.compose.foundation.layout.Arrangement
@@ -26,18 +32,29 @@ import androidx.compose.ui.unit.dp
 import uk.elizabeth.aac.AppViewModel
 import uk.elizabeth.aac.Screen
 import uk.elizabeth.aac.UiState
+import uk.elizabeth.aac.core.keyguard.Keyguard
 import uk.elizabeth.aac.core.model.KeyboardLayout
+import uk.elizabeth.aac.core.scan.ScanMode
+import uk.elizabeth.aac.core.voice.VoiceManifest
+import java.text.DateFormat
+import java.util.Date
 import uk.elizabeth.aac.core.touch.SelectOn
 import uk.elizabeth.aac.speech.SpeakerState
 
 /** Carer settings. Standard Android controls, scrolling allowed. */
 @Composable
-fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel) {
+fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, controller: TouchController) {
     val s = state.data.settings
     val touch = s.touch
     val context = LocalContext.current
     var pinDialog by remember { mutableStateOf(false) }
     var allLanguages by remember { mutableStateOf(false) }
+    var deleteVoice by remember { mutableStateOf<String?>(null) }
+    var voiceUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val importVoice = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> voiceUri = uri }
+    val saveKeyguard = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/svg+xml")) { uri ->
+        if (uri != null) vm.saveKeyguard(uri, keyguardSvg(context, controller))
+    }
 
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
@@ -88,7 +105,47 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel) {
                 }
             }
 
+            Section("Switch scanning") {
+                Text(
+                    "For when touch becomes too difficult. Rows of buttons are highlighted in turn; choosing a row then " +
+                        "highlights its buttons. Accessibility switches connect by USB or Bluetooth and act as a keyboard: " +
+                        "Enter (or the second switch) chooses, Space (or the first switch) moves on.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                SettingSwitch("Use switch scanning", s.scan.enabled) { v -> vm.updateSettings { it.copy(scan = it.scan.copy(enabled = v)) } }
+                if (s.scan.enabled) {
+                    RadioGroup(
+                        listOf(ScanMode.AUTO to "One switch: the highlight moves by itself", ScanMode.STEP to "Two switches: one moves, one chooses"),
+                        s.scan.mode,
+                    ) { v -> vm.updateSettings { it.copy(scan = it.scan.copy(mode = v)) } }
+                    if (s.scan.mode == ScanMode.AUTO) {
+                        SettingSlider("Time on each step", s.scan.intervalMs.toFloat(), 400f..6000f, 100f, ::ms) { v ->
+                            vm.updateSettings { it.copy(scan = it.scan.copy(intervalMs = v.toLong())) }
+                        }
+                    }
+                    SettingSlider("Passes along a row before going back", s.scan.passesBeforeBack.toFloat(), 1f..5f, 1f, { it.toInt().toString() }) { v ->
+                        vm.updateSettings { it.copy(scan = it.scan.copy(passesBeforeBack = v.toInt())) }
+                    }
+                }
+            }
+
+            Section("Keyguard") {
+                Text(
+                    "A keyguard is a clear acrylic sheet with a hole over each button. She can rest her hand on it without " +
+                        "pressing anything, and it guides her finger into the button. This saves a cutting template at real " +
+                        "size for a laser-cutting service. Open the main screen once first, and switch on full screen so " +
+                        "the buttons do not move.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Button(enabled = controller.savedLayout.isNotEmpty(), onClick = { saveKeyguard.launch("keyguard.svg") }) {
+                    Text("Save keyguard template")
+                }
+            }
+
             Section("Layout") {
+                SettingSwitch("Full screen", s.fullScreen, help = "Hides the Android status and navigation bars.") { v ->
+                    vm.updateSettings { it.copy(fullScreen = v) }
+                }
                 SettingSlider("Phrase columns", s.gridColumns.toFloat(), 2f..6f, 1f, { it.toInt().toString() }) { v ->
                     vm.updateSettings { it.copy(gridColumns = v.toInt()) }
                 }
@@ -125,7 +182,26 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel) {
             }
 
             Section("Voice") {
-                Text("Only voices that work without the internet are listed.", style = MaterialTheme.typography.bodyMedium)
+                Text("Voices on this tablet", style = MaterialTheme.typography.titleMedium)
+                RadioGroup(
+                    listOf<Pair<String?, String>>(null to "The tablet's own speech voice (chosen below)") +
+                        state.installedVoices.map { v -> v.id to describeVoice(v.manifest) },
+                    s.speech.customVoiceId,
+                ) { v -> vm.updateSettings { it.copy(speech = it.speech.copy(customVoiceId = v)) } }
+                state.installedVoices.forEach { v ->
+                    OutlinedButton(onClick = { deleteVoice = v.id }) { Text("Remove \"${v.manifest.name}\"") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = { importVoice.launch(arrayOf("*/*")) }) { Text("Import a voice (.elizvoice)") }
+                    Button(onClick = vm::testVoice) { Text("Test voice") }
+                }
+                Text(
+                    "Installed voices run entirely on this tablet. A voice made from someone's recordings is only " +
+                        "accepted with their consent record inside it.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text("The tablet's own speech voice", style = MaterialTheme.typography.titleMedium)
+                Text("Used when no installed voice is chosen, and as a back-up. Only voices that work without the internet are listed.", style = MaterialTheme.typography.bodyMedium)
                 if (speaker.engines.size > 1) {
                     Text("Speech engine")
                     RadioGroup(listOf<Pair<String?, String>>(null to "System default") + speaker.engines.map { it.packageName to it.label }, s.speech.enginePackage) { v ->
@@ -146,7 +222,6 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel) {
                     vm.updateSettings { it.copy(speech = it.speech.copy(pitch = v)) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = vm::testVoice) { Text("Test voice") }
                     OutlinedButton(onClick = {
                         try {
                             context.startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -174,9 +249,43 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel) {
         }
     }
 
+    voiceUri?.let { uri ->
+        PassphraseDialog("Passphrase for this voice file", confirm = false, onSubmit = {
+            voiceUri = null
+            vm.importVoice(uri, it)
+        }, onDismiss = { voiceUri = null })
+    }
+    deleteVoice?.let { id ->
+        ConfirmDialog("Remove this voice?", "It can be imported again from its .elizvoice file.", "Remove",
+            onConfirm = { vm.deleteVoice(id) }, onDismiss = { deleteVoice = null })
+    }
+
     if (pinDialog) {
         PinDialog("Set carer PIN", onSubmit = { vm.setPin(it); pinDialog = false }, onDismiss = { pinDialog = false })
     }
 }
 
 private fun ms(v: Float) = "${v.toInt()} ms"
+
+private fun describeVoice(m: VoiceManifest): String {
+    val date = m.consent?.let { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it.timeMillis)) }
+    return when (m.kind) {
+        "own" -> "${m.name}: made from ${m.speakerName}'s own recordings (consent given $date). AI-generated."
+        "donor" -> "${m.name}: made from ${m.speakerName}'s recordings, with their consent ($date). AI-generated."
+        else -> "${m.name}: published voice (${m.licence}). AI-generated."
+    }
+}
+
+private fun keyguardSvg(context: Context, controller: TouchController): String {
+    val metrics = context.resources.displayMetrics
+    val (width, height) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val bounds = context.getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
+        bounds.width() to bounds.height()
+    } else {
+        val real = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        context.getSystemService(WindowManager::class.java).defaultDisplay.getRealMetrics(real)
+        real.widthPixels to real.heightPixels
+    }
+    return Keyguard.svg(controller.savedLayout, width, height, metrics.xdpi, metrics.ydpi)
+}

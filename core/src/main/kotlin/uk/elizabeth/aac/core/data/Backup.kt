@@ -106,6 +106,37 @@ voicebank/     voice banking recordings (16-bit mono WAV); the sentence for each
         }
     }
 
+    /**
+     * Reads an encrypted file entry by entry without loading entries into memory, for large
+     * files such as voice models. Entry names are passed as they are; callers must check them
+     * (see [isSafeRelativePath]). The whole file is read to the end so truncation is detected,
+     * but entries seen before a failure may already have been processed.
+     */
+    fun readStreaming(input: InputStream, passphrase: CharArray, onEntry: (name: String, data: InputStream) -> Unit) {
+        val decrypting = DecryptingInputStream(input, passphrase)
+        ZipInputStream(decrypting).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (!entry.isDirectory) onEntry(entry.name, NonClosingStream(zip))
+            }
+            val buffer = ByteArray(CHUNK)
+            while (decrypting.read(buffer, 0, buffer.size) >= 0) Unit
+        }
+    }
+
+    /** True for a relative path with no "..", absolute or odd parts, safe to create under a folder. */
+    fun isSafeRelativePath(name: String): Boolean {
+        if (name.isEmpty() || name.length > 200 || name.startsWith("/") || '\\' in name) return false
+        if (name.any { it.isISOControl() || it == ':' }) return false
+        return name.split('/').all { it.isNotEmpty() && it != "." && it != ".." }
+    }
+
+    private class NonClosingStream(private val inner: InputStream) : InputStream() {
+        override fun read() = inner.read()
+        override fun read(b: ByteArray, off: Int, len: Int) = inner.read(b, off, len)
+        override fun close() = Unit
+    }
+
     internal fun deriveKey(passphrase: CharArray, salt: ByteArray, iterations: Int): SecretKeySpec {
         val spec = PBEKeySpec(passphrase, salt, iterations, 256)
         try {

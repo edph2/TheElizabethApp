@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +28,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,15 +73,27 @@ private fun App(vm: AppViewModel) {
     }
     val highContrast = state.data.settings.highContrast
     var askPin by remember { mutableStateOf(false) }
+    val controller = remember { TouchController() }
+    val activity = LocalContext.current as? ComponentActivity
+    LaunchedEffect(state.data.settings.fullScreen) {
+        val window = activity?.window ?: return@LaunchedEffect
+        val insets = WindowCompat.getInsetsController(window, window.decorView)
+        if (state.data.settings.fullScreen) {
+            insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insets.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            insets.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
     var pinError by remember { mutableStateOf<String?>(null) }
 
     CompositionLocalProvider(LocalPalette provides if (highContrast) Palette.HighContrast else Palette.Standard) {
         CarerTheme(dark = highContrast) {
             when (state.screen) {
-                Screen.MAIN -> MainScreen(state, speaker, vm) {
+                Screen.MAIN -> MainScreen(state, speaker, vm, controller) {
                     if (vm.needsPin()) askPin = true else vm.openScreen(Screen.SETTINGS)
                 }
-                Screen.SETTINGS -> SettingsScreen(state, speaker, vm)
+                Screen.SETTINGS -> SettingsScreen(state, speaker, vm, controller)
                 Screen.PHRASES -> PhraseEditorScreen(state, vm)
                 Screen.PRIVACY -> PrivacyScreen(state, vm)
                 Screen.VOICE_BANK -> VoiceBankScreen(state, vm)

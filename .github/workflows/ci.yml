@@ -24,7 +24,7 @@ jobs:
 
       - name: Tests (training tools)
         run: |
-          pip install cryptography
+          pip install cryptography onnx
           python3 -m unittest discover tools/voice-training -v
 
       - name: Unit tests (core)

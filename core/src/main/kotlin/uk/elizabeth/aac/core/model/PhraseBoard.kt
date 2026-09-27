@@ -93,6 +93,7 @@ data class PhraseBoard(
                     "Hello, how are you?", "Lovely to see you", "What have you been up to?",
                     "Tell me more", "That's wonderful", "I don't agree", "That's funny",
                     "Goodbye, see you soon", "Please be patient, I'm using a communication aid",
+                    "This is a computer voice made from recordings of my own voice",
                     "Can you say that again?", "I'm still thinking", "Never mind",
                 ),
                 category(

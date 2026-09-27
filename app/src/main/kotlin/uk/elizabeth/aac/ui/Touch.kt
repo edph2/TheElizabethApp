@@ -43,6 +43,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import uk.elizabeth.aac.core.scan.ScanMode
+import uk.elizabeth.aac.core.scan.ScanSettings
+import uk.elizabeth.aac.core.scan.Scanner
 import uk.elizabeth.aac.core.touch.Bounds
 import uk.elizabeth.aac.core.touch.TargetRegistry
 import uk.elizabeth.aac.core.touch.TouchFilter
@@ -58,16 +61,65 @@ class TouchController {
     private val registry = TargetRegistry()
     private val actions = HashMap<String, () -> Unit>()
 
+    private val scanner = Scanner()
+    private var scanEnabled = false
+    private var lastSwitchAt = Long.MIN_VALUE / 2
+
     var highlighted by mutableStateOf<String?>(null)
         private set
     var dwellProgress by mutableFloatStateOf(0f)
         private set
 
+    /** Buttons highlighted by switch scanning. */
+    var scanHighlight by mutableStateOf<List<String>>(emptyList())
+        private set
+
     internal var origin = Offset.Zero
     internal var density = 1f
 
-    fun applySettings(settings: TouchSettings) {
+    /** Where the touch layer is on the physical screen, for the keyguard template. */
+    var screenOffset = Offset.Zero
+        internal set
+
+    fun applySettings(settings: TouchSettings, scan: ScanSettings = ScanSettings()) {
         filter.settings = settings
+        scanner.settings = scan
+        if (scanEnabled != scan.enabled) {
+            scanEnabled = scan.enabled
+            scanner.restart(SystemClock.uptimeMillis())
+            if (!scan.enabled) scanHighlight = emptyList()
+        }
+    }
+
+    /** The main screen's buttons, in pixels on the physical screen, as they were when Settings was opened. */
+    var savedLayout: Map<String, Bounds> = emptyMap()
+        private set
+
+    fun saveLayout() {
+        savedLayout = (registry.snapshot() + placeholders).mapValues { (_, b) ->
+            Bounds(b.left + screenOffset.x, b.top + screenOffset.y, b.right + screenOffset.x, b.bottom + screenOffset.y)
+        }
+    }
+
+    /** Advances switch scanning; call regularly while scanning is on. */
+    internal fun scanTick(time: Long) {
+        if (!scanEnabled) return
+        scanner.setRows(Scanner.rowsOf(registry.snapshot()), time)
+        scanner.tick(time)
+        scanHighlight = scanner.highlighted
+    }
+
+    /** A switch was pressed. [choose] is false for the "move" switch in two-switch scanning. */
+    internal fun onSwitch(choose: Boolean, time: Long) {
+        if (!scanEnabled) return
+        if (time - lastSwitchAt < filter.settings.repeatGuardMs) return
+        lastSwitchAt = time
+        if (!choose && scanner.settings.mode == ScanMode.STEP) {
+            scanner.move(time)
+        } else {
+            scanner.choose(time)?.let { actions[it]?.invoke() }
+        }
+        scanHighlight = scanner.highlighted
     }
 
     internal fun register(id: String, rect: Rect, action: () -> Unit) {
@@ -78,6 +130,16 @@ class TouchController {
     internal fun unregister(id: String) {
         registry.unregister(id)
         actions.remove(id)
+        placeholders.remove(id)
+    }
+
+    /** Empty cells: not pressable or scanned, but they get a hole in the keyguard. */
+    private val placeholders = HashMap<String, Bounds>()
+
+    internal fun registerPlaceholder(id: String, rect: Rect) {
+        registry.unregister(id)
+        actions.remove(id)
+        placeholders[id] = Bounds(rect.left, rect.top, rect.right, rect.bottom)
     }
 
     internal fun down(position: Offset, time: Long) = handle(filter.onDown(hit(position), time), time)
@@ -155,12 +217,24 @@ fun AacButton(
     modifier: Modifier = Modifier,
     fontSize: TextUnit = 24.sp,
     badge: String? = null,
+    /** False for an empty cell: drawn as an outline, cannot be pressed, keeps its place in the keyguard. */
+    enabled: Boolean = true,
 ) {
     val palette = LocalPalette.current
     val action by rememberUpdatedState(onPress)
     DisposableEffect(controller, id) { onDispose { controller.unregister(id) } }
-    val highlighted = controller.highlighted == id
+    val highlighted = controller.highlighted == id || id in controller.scanHighlight
     val shape = remember { RoundedCornerShape(14.dp) }
+    if (!enabled) {
+        Box(
+            modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .onGloballyPositioned { controller.registerPlaceholder(id, it.boundsInRoot()) }
+                .border(1.dp, palette.background(kind), shape),
+        )
+        return
+    }
     Box(
         modifier
             .fillMaxSize()

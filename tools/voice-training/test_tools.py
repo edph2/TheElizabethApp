@@ -65,27 +65,68 @@ class ToolsTest(unittest.TestCase):
             self.assertTrue(any("consent" in p for p in problems))
             self.assertTrue(any("checksum" in p for p in problems))
 
-    def test_package_voice(self):
+    def _package(self, argv):
+        with mock.patch.object(sys, "argv", ["package_voice.py"] + argv), \
+                mock.patch("getpass.getpass", return_value="correct horse"):
+            package_voice.main()
+
+    def _open(self, path):
+        plain = io.BytesIO()
+        with open(path, "rb") as f:
+            elizbak.decrypt_stream(f, plain, "correct horse")
+        return zipfile.ZipFile(plain)
+
+    def _espeak(self, d):
+        os.makedirs(os.path.join(d, "espeak-ng-data", "voices", "!v"))
+        with open(os.path.join(d, "espeak-ng-data", "voices", "!v", "Mr serious"), "w") as f:
+            f.write("x")
+        with open(os.path.join(d, "espeak-ng-data", "en_dict"), "w") as f:
+            f.write("y")
+        return os.path.join(d, "espeak-ng-data")
+
+    def test_package_trained_voice(self):
+        import onnx
+        from onnx import TensorProto, helper
+
         with tempfile.TemporaryDirectory() as d:
             data = os.path.join(d, "data")
             make_dataset(data)
             model, config, out = (os.path.join(d, n) for n in ["m.onnx", "m.onnx.json", "v.elizvoice"])
-            with open(model, "wb") as f:
-                f.write(b"fake onnx")
+            graph = helper.make_graph([helper.make_node("Identity", ["x"], ["y"])], "g",
+                                      [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1])],
+                                      [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1])])
+            onnx.save(helper.make_model(graph), model)
             with open(config, "w") as f:
-                json.dump({"audio": {"sample_rate": 22050}}, f)
-            argv = ["package_voice.py", "--model", model, "--config", config, "--dataset", data,
-                    "--base-model", "base", "--out", out]
-            with mock.patch.object(sys, "argv", argv), mock.patch("getpass.getpass", return_value="correct horse"):
-                package_voice.main()
-            plain = io.BytesIO()
-            with open(out, "rb") as f:
-                elizbak.decrypt_stream(f, plain, "correct horse")
-            z = zipfile.ZipFile(plain)
+                json.dump({"audio": {"sample_rate": 22050}, "espeak": {"voice": "en-gb-x-rp"}, "num_speakers": 1,
+                           "language": {"name_english": "English"}, "phoneme_id_map": {"_": [0], "^": [1], " ": [3]}}, f)
+            self._package(["--model", model, "--config", config, "--dataset", data, "--espeak-data", self._espeak(d),
+                           "--base-model", "base", "--out", out])
+            z = self._open(out)
             manifest = json.loads(z.read("voice/manifest.json"))
-            self.assertEqual(hashlib.sha256(b"fake onnx").hexdigest(), manifest["modelSha256"])
+            self.assertEqual("own", manifest["kind"])
             self.assertEqual("Elizabeth", manifest["speakerName"])
-            self.assertEqual(b"fake onnx", z.read("voice/model.onnx"))
+            self.assertEqual(hashlib.sha256(z.read("voice/model.onnx")).hexdigest(), manifest["modelSha256"])
+            self.assertEqual("_ 0\n^ 1\n  3\n", z.read("voice/tokens.txt").decode())
+            meta = {p.key: p.value for p in onnx.load_from_string(z.read("voice/model.onnx")).metadata_props}
+            self.assertEqual({"model_type": "vits", "comment": "piper", "language": "English", "voice": "en-gb-x-rp",
+                              "has_espeak": "1", "n_speakers": "1", "sample_rate": "22050"}, meta)
+            self.assertIn("voice/espeak-ng-data/voices/!v/Mr serious", z.namelist())
+
+    def test_package_stock_voice(self):
+        with tempfile.TemporaryDirectory() as d:
+            sherpa = os.path.join(d, "vits-piper-en_GB-test-medium")
+            os.makedirs(sherpa)
+            self._espeak(sherpa)
+            with open(os.path.join(sherpa, "en_GB-test-medium.onnx"), "wb") as f:
+                f.write(b"model")
+            with open(os.path.join(sherpa, "tokens.txt"), "w") as f:
+                f.write("_ 0\n")
+            out = os.path.join(d, "s.elizvoice")
+            self._package(["--sherpa-dir", sherpa, "--licence", "CC-BY-4.0", "--out", out])
+            manifest = json.loads(self._open(out).read("voice/manifest.json"))
+            self.assertEqual(("stock", "CC-BY-4.0", "en_GB-test-medium"), (manifest["kind"], manifest["licence"], manifest["name"]))
+            with self.assertRaises(SystemExit):
+                self._package(["--sherpa-dir", sherpa, "--out", out])  # licence required
 
 
 if __name__ == "__main__":

@@ -80,12 +80,16 @@ computer:
        piper -m her-voice.onnx --output_file test.wav
    ```
 
-8. **Package** it for the tablet. This creates an encrypted file. Inside it, a manifest
-   records whose voice it is, her consent, the base model, and checksums of the model and
-   the training data.
+8. **Package** it for the tablet. You will need the pronunciation data `espeak-ng-data`,
+   from `espeak-ng-data.tar.bz2` in the sherpa-onnx
+   [tts-models release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models).
+   Packaging adds the metadata the tablet's speech engine needs, and creates an encrypted
+   file. Inside it, a manifest records whose voice it is, her consent, the base model, and
+   checksums of the model and the training data.
    ```
+   pip install cryptography onnx
    python3 tools/voice-training/package_voice.py --model her-voice.onnx \
-       --config her-voice.onnx.json --dataset dataset \
+       --config her-voice.onnx.json --dataset dataset --espeak-data espeak-ng-data \
        --base-model "<name of the checkpoint>" --name "Elizabeth's voice" --out her-voice.elizvoice
    ```
 
@@ -93,6 +97,22 @@ computer:
 
 10. **Delete** `dataset/`, `work/`, `voice-training.zip`, `her-voice.onnx` and `test.wav`
     from the training computer.
+
+## A good voice to use in the meantime
+
+Until her own voice is ready, a published British voice sounds far more natural than most
+built-in tablet voices, and runs the same way, on the tablet. sherpa-onnx publishes Piper
+voices ready to use. They are in the same
+[tts-models release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models), for
+example `vits-piper-en_GB-alba-medium.tar.bz2` or
+`vits-piper-en_GB-southern_english_female-medium.tar.bz2`. Read each voice's `MODEL_CARD`
+for its licence and the dataset it was trained on, then package it:
+
+```
+tar xjf vits-piper-en_GB-alba-medium.tar.bz2
+python3 tools/voice-training/package_voice.py --sherpa-dir vits-piper-en_GB-alba-medium \
+    --licence "<licence from MODEL_CARD>" --name "Alba (Scottish English)" --out alba.elizvoice
+```
 
 ## If her voice has already changed
 

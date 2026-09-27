@@ -34,6 +34,17 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -50,17 +61,55 @@ import uk.elizabeth.aac.speech.SpeakerState
 
 private const val TABS_PER_PAGE = 6
 
+private val chooseKeys = setOf(Key.Enter, Key.NumPadEnter, Key.DirectionCenter, Key.ButtonA, Key.Two)
+private val moveKeys = setOf(Key.Spacebar, Key.Tab, Key.DirectionRight, Key.ButtonB, Key.One)
+
 /** The communication screen she uses all day. Nothing on it scrolls. */
 @Composable
-fun MainScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, onOpenSettings: () -> Unit) {
+fun MainScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, controller: TouchController, onOpenSettings: () -> Unit) {
     val palette = LocalPalette.current
     val settings = state.data.settings
-    val controller = remember { TouchController() }
-    controller.applySettings(settings.touch)
+    controller.applySettings(settings.touch, settings.scan)
     val scale = settings.textScale
+    val focus = remember { FocusRequester() }
+    val view = LocalView.current
 
-    Column(Modifier.fillMaxSize().background(palette.background)) {
-        StatusStrip(speaker, onOpenSettings)
+    if (settings.scan.enabled) {
+        LaunchedEffect(settings.scan) {
+            focus.requestFocus()
+            while (true) {
+                controller.scanTick(SystemClock.uptimeMillis())
+                delay(50)
+            }
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(palette.background)
+            .onGloballyPositioned {
+                val location = IntArray(2)
+                view.getLocationOnScreen(location)
+                controller.screenOffset = Offset(location[0].toFloat(), location[1].toFloat())
+            }
+            .onPreviewKeyEvent { event ->
+                // Accessibility switches connect as a keyboard. Space/Tab move, Enter chooses;
+                // with one-switch scanning any of them chooses.
+                if (!settings.scan.enabled) return@onPreviewKeyEvent false
+                val choose = event.key in chooseKeys
+                val move = event.key in moveKeys
+                if (!choose && !move) return@onPreviewKeyEvent false
+                if (event.type == KeyEventType.KeyDown) controller.onSwitch(choose, SystemClock.uptimeMillis())
+                true
+            }
+            .focusRequester(focus)
+            .focusable(),
+    ) {
+        StatusStrip(speaker, state.customSpeaking) {
+            controller.saveLayout() // for the keyguard template, which is made from Settings
+            onOpenSettings()
+        }
         if (settings.listenerView) {
             Text(
                 text = state.message.ifBlank { " " },
@@ -165,7 +214,10 @@ private fun PredictionRow(state: UiState, controller: TouchController, vm: AppVi
         for (i in 0 until slots) {
             val word = state.predictions.getOrNull(i)
             Cell {
-                if (word != null) AacButton(controller, "prediction-$i", word, Kind.PREDICTION, { vm.onWord(word) }, fontSize = (24 * scale).sp)
+                AacButton(
+                    controller, "prediction-$i", word ?: "", Kind.PREDICTION, { if (word != null) vm.onWord(word) },
+                    fontSize = (24 * scale).sp, enabled = word != null,
+                )
             }
         }
     }
@@ -226,20 +278,23 @@ private fun PagedGrid(state: UiState, controller: TouchController, vm: AppViewMo
                     Cell {
                         if (item != null) {
                             AacButton(controller, item.id, item.text, Kind.PHRASE, item.onPress, fontSize = (22 * scale).sp, badge = item.badge)
+                        } else {
+                            AacButton(controller, "cell-$row-$col", "", Kind.PHRASE, {}, enabled = false)
                         }
                     }
                 }
             }
         }
-        if (pages > 1) {
+        // Always shown, so buttons never change size or move between categories (motor memory, keyguard).
+        run {
             Row(Modifier.weight(0.7f)) {
-                Cell { if (page > 0) AacButton(controller, "page-prev", "◀ Back", Kind.NAV, { vm.changePage(-1) }, fontSize = 22.sp) }
+                Cell { AacButton(controller, "page-prev", "◀ Back", Kind.NAV, { vm.changePage(-1) }, fontSize = 22.sp, enabled = page > 0) }
                 Cell {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("Page ${page + 1} of $pages", color = LocalPalette.current.statusText, fontSize = 20.sp)
                     }
                 }
-                Cell { if (page < pages - 1) AacButton(controller, "page-next", "Next ▶", Kind.NAV, { vm.changePage(1) }, fontSize = 22.sp) }
+                Cell { AacButton(controller, "page-next", "Next ▶", Kind.NAV, { vm.changePage(1) }, fontSize = 22.sp, enabled = page < pages - 1) }
             }
         }
     }
@@ -271,7 +326,7 @@ private fun Keyboard(state: UiState, controller: TouchController, vm: AppViewMod
  * which must be held for 2 seconds so it is never opened by accident.
  */
 @Composable
-private fun StatusStrip(speaker: SpeakerState, onOpenSettings: () -> Unit) {
+private fun StatusStrip(speaker: SpeakerState, customSpeaking: Boolean, onOpenSettings: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
     var warnings by remember { mutableStateOf(emptyList<String>()) }
@@ -286,7 +341,7 @@ private fun StatusStrip(speaker: SpeakerState, onOpenSettings: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(if (speaker.speaking) "🔊 Speaking…" else "", color = palette.statusText, fontSize = 18.sp, modifier = Modifier.width(150.dp))
+        Text(if (speaker.speaking || customSpeaking) "🔊 Speaking…" else "", color = palette.statusText, fontSize = 18.sp, modifier = Modifier.width(150.dp))
         Text(
             warnings.joinToString("   ·   ") { "⚠ $it" },
             color = palette.highlight,

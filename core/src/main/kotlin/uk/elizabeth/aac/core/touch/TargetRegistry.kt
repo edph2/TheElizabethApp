@@ -29,6 +29,9 @@ class TargetRegistry {
         targets.remove(id)
     }
 
+    /** Where every button currently is. */
+    fun snapshot(): Map<String, Bounds> = LinkedHashMap(targets)
+
     /**
      * The button containing the point, or else the nearest button within [snapRadiusPx].
      * Returns null if the touch is too far from any button.

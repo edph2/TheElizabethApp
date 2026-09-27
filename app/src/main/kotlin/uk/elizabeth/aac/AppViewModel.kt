@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,17 +22,21 @@ import uk.elizabeth.aac.core.audio.Wav
 import uk.elizabeth.aac.core.data.AppData
 import uk.elizabeth.aac.core.data.WrongPassphraseException
 import uk.elizabeth.aac.core.model.AppSettings
+import uk.elizabeth.aac.core.model.SpeechSettings
 import uk.elizabeth.aac.core.model.Phrase
 import uk.elizabeth.aac.core.model.PhraseBoard
 import uk.elizabeth.aac.core.predict.WordPredictor
 import uk.elizabeth.aac.core.privacy.PinHasher
 import uk.elizabeth.aac.core.privacy.PrivacyEventType
 import uk.elizabeth.aac.core.text.MessageEditor
+import uk.elizabeth.aac.core.voice.VoiceManifest
 import uk.elizabeth.aac.core.voicebank.VoiceBank
 import uk.elizabeth.aac.core.voicebank.VoiceConsent
 import uk.elizabeth.aac.core.voicebank.VoiceTake
 import uk.elizabeth.aac.data.Repository
+import uk.elizabeth.aac.speech.PiperVoice
 import uk.elizabeth.aac.speech.Speaker
+import uk.elizabeth.aac.speech.VoiceModels
 import java.util.UUID
 
 enum class Screen { MAIN, SETTINGS, PHRASES, PRIVACY, VOICE_BANK }
@@ -74,7 +79,13 @@ data class UiState(
     val pendingRecording: PendingRecording? = null,
     /** The voice banking sentence currently shown. */
     val promptIndex: Int = 0,
+    /** Voice models installed on the tablet (her own voice, donor or published voices). */
+    val installedVoices: List<VoiceInfo> = emptyList(),
+    /** True while an installed voice is preparing or speaking a message. */
+    val customSpeaking: Boolean = false,
 )
+
+data class VoiceInfo(val id: String, val manifest: VoiceManifest)
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = Repository(application)
@@ -84,6 +95,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val editor = MessageEditor()
     private val predictor = WordPredictor(WordPredictor.loadSeedWords())
     private val chime = Chime.generate()
+    private val voiceModels = VoiceModels(application)
 
     /** The voice banking script: the bundled sentences plus any the family added. */
     private val script = VoiceBank.loadScript()
@@ -106,7 +118,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (loaded.isFirstRun) data = data.copy(privacyLog = data.privacyLog.append(PrivacyEventType.APP_FIRST_RUN, now()))
             val firstTab = data.board.categories.firstOrNull()?.id ?: Tabs.KEYBOARD
             _state.update { it.copy(loaded = true, data = data, tab = firstTab, notice = loaded.problem) }
-            speaker.configure(data.settings.speech)
+            configureSpeech(data.settings.speech)
+            refreshVoices()
             refreshText()
             if (loaded.isFirstRun) saveData.trySend(Unit)
         }
@@ -155,6 +168,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onAttention() {
+        synthesis?.cancel()
         if (_state.value.attentionOn) {
             player.stop()
             _state.update { it.copy(attentionOn = false) }
@@ -196,8 +210,87 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun speakAloud(text: String) {
         player.stop()
+        speaker.stop()
+        synthesis?.cancel()
         _state.update { it.copy(attentionOn = false) }
-        if (!speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
+        val voice = piper
+        if (voice == null) {
+            if (!speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
+            return
+        }
+        // Her own (or another installed) voice, synthesised on the tablet.
+        synthesis = viewModelScope.launch {
+            _state.update { it.copy(customSpeaking = true) }
+            val audio = runCatching { withContext(Dispatchers.Default) { voice.synthesize(text, settings.speech.rate) } }.getOrNull()
+            if (audio != null && audio.samples.isNotEmpty()) {
+                player.play(audio) { _state.update { it.copy(customSpeaking = false) } }
+            } else {
+                _state.update { it.copy(customSpeaking = false) }
+                if (!speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
+            }
+        }
+    }
+
+    // ---- Voices ----
+
+    private var piper: PiperVoice? = null
+    private var synthesis: Job? = null
+
+    /** Applies speech settings: the Android voice (always kept ready as a fallback) and any installed voice. */
+    private fun configureSpeech(speech: SpeechSettings) {
+        speaker.configure(speech)
+        val wanted = speech.customVoiceId
+        if (piper?.voice?.id == wanted) return
+        piper?.release()
+        piper = null
+        refreshVoices()
+        if (wanted == null) return
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching { voiceModels.find(wanted)?.let { PiperVoice(it) } }.getOrNull()
+            }
+            if (loaded != null && settings.speech.customVoiceId == wanted) {
+                piper = loaded
+            } else {
+                loaded?.release()
+                if (settings.speech.customVoiceId == wanted) notify("The chosen voice could not be loaded, so the tablet's own voice is being used.")
+            }
+        }
+    }
+
+    private fun refreshVoices() {
+        viewModelScope.launch {
+            val voices = withContext(Dispatchers.IO) { voiceModels.list() }
+            _state.update { it.copy(installedVoices = voices.map { v -> VoiceInfo(v.id, v.manifest) }) }
+        }
+    }
+
+    fun importVoice(uri: Uri, passphrase: CharArray) {
+        viewModelScope.launch {
+            _state.update { it.copy(notice = "Importing the voice…") }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val resolver = getApplication<Application>().contentResolver
+                    (resolver.openInputStream(uri) ?: error("Could not open the file")).use { voiceModels.import(it, passphrase) }
+                }
+            }.onSuccess { voice ->
+                updateData { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_MODEL_ADDED, now(), voice.manifest.name)) }
+                refreshVoices()
+                notify("\"${voice.manifest.name}\" is installed. Choose it below to use it.")
+            }.onFailure { e ->
+                notify(if (e is WrongPassphraseException) "Wrong passphrase, or the file is damaged" else "Could not import the voice: ${e.message}")
+            }
+            passphrase.fill(' ')
+        }
+    }
+
+    fun deleteVoice(id: String) {
+        if (settings.speech.customVoiceId == id) updateSettings { it.copy(speech = it.speech.copy(customVoiceId = null)) }
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { voiceModels.delete(id) }
+            updateData { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_MODEL_REMOVED, now())) }
+            refreshVoices()
+        }
     }
 
     /** Adds a spoken message to history and to the word model, if she has allowed that. */
@@ -260,7 +353,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             log = log.append(if (new.historyEnabled) PrivacyEventType.HISTORY_ENABLED else PrivacyEventType.HISTORY_DISABLED, now())
         }
         updateData { it.copy(settings = new, privacyLog = log, history = it.history.trimmedTo(new.historySize)) }
-        if (old.speech != new.speech) speaker.configure(new.speech)
+        if (old.speech != new.speech) configureSpeech(new.speech)
         refreshText()
     }
 
@@ -449,11 +542,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun eraseEverything() {
         viewModelScope.launch {
             repository.eraseAll()
+            withContext(Dispatchers.IO) { voiceModels.deleteAll() }
             predictor.forgetAll()
             editor.clear()
             val fresh = AppData().let { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.ALL_DATA_ERASED, now())) }
             _state.update { UiState(loaded = true, data = fresh, tab = fresh.board.categories.first().id, screen = Screen.MAIN) }
-            speaker.configure(fresh.settings.speech)
+            configureSpeech(fresh.settings.speech)
             refreshText()
             saveData.trySend(Unit)
             saveWords.trySend(Unit)
@@ -484,13 +578,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 predictor.import(result.wordModel)
                 _state.update { it.copy(data = data, tab = data.board.categories.firstOrNull()?.id ?: Tabs.KEYBOARD, page = 0, promptIndex = 0) }
                 saveData.trySend(Unit)
-                speaker.configure(data.settings.speech)
+                configureSpeech(data.settings.speech)
                 refreshText()
                 notify("Data restored")
             }.onFailure { e ->
                 notify(if (e is WrongPassphraseException) "Wrong passphrase, or the file is damaged" else "Could not restore: ${e.message}")
             }
             passphrase.fill(' ')
+        }
+    }
+
+    fun saveKeyguard(uri: Uri, svg: String) {
+        viewModelScope.launch {
+            runCatching { openOutput(uri).use { it.write(svg.toByteArray()) } }
+                .onSuccess { notify("Keyguard template saved. Cut it at 100% scale, and check it against the screen before cutting acrylic.") }
+                .onFailure { e -> notify("Could not save: ${e.message}") }
         }
     }
 
@@ -510,6 +612,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun now() = System.currentTimeMillis()
 
     override fun onCleared() {
+        piper?.release()
         player.stop()
         speaker.shutdown()
     }

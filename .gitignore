@@ -11,3 +11,4 @@ local.properties
 *.wav
 *.onnx
 voice-data/
+app/libs/*.aar

@@ -12,6 +12,8 @@ enum class KeyboardLayout(val rows: List<String>) {
 
 @Serializable
 data class SpeechSettings(
+    /** An installed voice model (e.g. her own voice) to speak with, or null for the Android voice. */
+    val customVoiceId: String? = null,
     /** Android TTS engine package, or null for the system default. */
     val enginePackage: String? = null,
     /** Voice name within the engine, or null for the engine's default. */
