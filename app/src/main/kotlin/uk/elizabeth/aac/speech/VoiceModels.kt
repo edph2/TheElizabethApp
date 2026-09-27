@@ -15,11 +15,10 @@ import java.io.InputStream
 import java.security.MessageDigest
 import java.util.UUID
 
-/** A voice model installed on the tablet. */
-class InstalledVoice(val id: String, val dir: File, val manifest: VoiceManifest) {
+/** A voice model installed on the tablet. [espeakData] is shared by all voices. */
+class InstalledVoice(val id: String, val dir: File, val manifest: VoiceManifest, val espeakData: File) {
     val model get() = File(dir, "model.onnx")
     val tokens get() = File(dir, "tokens.txt")
-    val espeakData get() = File(dir, "espeak-ng-data")
 }
 
 /**
@@ -33,8 +32,15 @@ class InstalledVoice(val id: String, val dir: File, val manifest: VoiceManifest)
 class VoiceModels(context: Context) {
     private val root = File(context.noBackupFilesDir, "voices").apply { mkdirs() }
 
+    /**
+     * Pronunciation data (espeak-ng) shared by every voice, at a path that never changes. The
+     * speech engine loads it once per app session from the first voice used, so it must not
+     * live inside a voice's folder, where removing that voice would pull it from under the engine.
+     */
+    private val sharedEspeak = File(root, ESPEAK)
+
     fun list(): List<InstalledVoice> =
-        root.listFiles { f -> f.isDirectory && !f.name.endsWith(PARTIAL) && !f.name.endsWith(OLD) }.orEmpty()
+        root.listFiles { f -> f.isDirectory && f != sharedEspeak && !f.name.endsWith(PARTIAL) && !f.name.endsWith(OLD) }.orEmpty()
             .mapNotNull { dir -> runCatching { load(dir) }.getOrNull() }
             .sortedBy { it.manifest.name }
 
@@ -61,12 +67,15 @@ class VoiceModels(context: Context) {
 
     // ---- Backup and restore of installed voices ----
 
-    /** Every file of an installed voice, as (path within the voice, file), for backups. */
-    fun files(voice: InstalledVoice): List<Pair<String, File>> =
-        voice.dir.walkTopDown().filter { it.isFile }
-            .map { it.relativeTo(voice.dir).invariantSeparatorsPath to it }
-            .sortedBy { it.first }
-            .toList()
+    /**
+     * Every file of an installed voice, as (path within the voice package, file), for backups.
+     * Includes the shared pronunciation data, so each voice in a backup is complete on its own.
+     */
+    fun files(voice: InstalledVoice): List<Pair<String, File>> {
+        fun under(dir: File, prefix: String) = dir.walkTopDown().filter { it.isFile }
+            .map { prefix + it.relativeTo(dir).invariantSeparatorsPath to it }
+        return (under(voice.dir, "") + under(sharedEspeak, "$ESPEAK/")).sortedBy { it.first }.toList()
+    }
 
     /** Writes one file of a voice being restored from a backup. Call [finishRestore] afterwards. */
     fun restoreFile(id: String, relativePath: String, data: InputStream) {
@@ -129,11 +138,16 @@ class VoiceModels(context: Context) {
     /** Checks a complete voice folder and moves it into place. */
     private fun install(partial: File, id: String): InstalledVoice {
         val voice = load(partial)
+        val packagedEspeak = File(partial, ESPEAK)
         val problems = voice.manifest.problems().toMutableList()
-        if (!voice.espeakData.isDirectory) problems += "The voice has no pronunciation data"
+        if (!packagedEspeak.isDirectory && !sharedEspeak.isDirectory) problems += "The voice has no pronunciation data"
         if (fileSha256(voice.model) != voice.manifest.modelSha256) problems += "The voice model does not match its checksum"
         if (sha256Hex(voice.tokens.readBytes()) != voice.manifest.tokensSha256) problems += "The voice's phoneme table does not match its checksum"
         if (problems.isNotEmpty()) throw IOException(problems.joinToString(". "))
+        // The first voice provides the shared pronunciation data; later copies are not needed.
+        if (packagedEspeak.isDirectory) {
+            if (!sharedEspeak.exists()) packagedEspeak.renameTo(sharedEspeak) else packagedEspeak.deleteRecursively()
+        }
         val installed = File(root, id)
         if (!partial.renameTo(installed)) throw IOException("Could not install the voice")
         return load(installed)
@@ -149,7 +163,7 @@ class VoiceModels(context: Context) {
 
     private fun load(dir: File): InstalledVoice {
         val manifest = VoiceManifest.parse(File(dir, "manifest.json").readText())
-        return InstalledVoice(dir.name.removeSuffix(PARTIAL), dir, manifest)
+        return InstalledVoice(dir.name.removeSuffix(PARTIAL), dir, manifest, sharedEspeak)
     }
 
     private fun fileSha256(file: File): String {
@@ -168,6 +182,7 @@ class VoiceModels(context: Context) {
     private companion object {
         const val PARTIAL = ".partial"
         const val OLD = ".old"
+        const val ESPEAK = "espeak-ng-data"
         const val MAX_BYTES = 400L * 1024 * 1024
     }
 }

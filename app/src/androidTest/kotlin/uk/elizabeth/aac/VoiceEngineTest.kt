@@ -50,6 +50,28 @@ class VoiceEngineTest {
         }
     }
 
+    /**
+     * The speech engine loads pronunciation data once per app session. Removing a voice and
+     * installing another (or restoring a backup) must not leave it reading deleted files, which
+     * cut speech short.
+     */
+    @Test
+    fun speechStaysCompleteAfterReplacingAVoice() {
+        val assets = instrumentation.context.assets
+        assumeTrue("test voice not packaged", assets.list("")?.contains(TEST_VOICE) == true)
+        repeat(2) {
+            val voice = assets.open(TEST_VOICE).use { models.import(it, PASSPHRASE.toCharArray()) }
+            val piper = PiperVoice(voice)
+            try {
+                val audio = piper.synthesize("Could I have a cup of tea with a little milk, please?", 1.0f)
+                assertTrue("round ${it + 1}: too short: ${audio.durationMs} ms", audio.durationMs > 1_500)
+            } finally {
+                piper.release()
+            }
+            models.delete(voice.id)
+        }
+    }
+
     @Test
     fun wrongPassphraseInstallsNothing() {
         val assets = instrumentation.context.assets
