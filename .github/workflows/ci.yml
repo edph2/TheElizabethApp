@@ -24,7 +24,7 @@ jobs:
 
       - name: Tests (training tools)
         run: |
-          pip install cryptography onnx
+          pip install -r tools/voice-training/requirements.txt
           python3 -m unittest discover tools/voice-training -v
 
       - name: Unit tests (core)
@@ -86,7 +86,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TEST_VOICE_PASSPHRASE: correct horse battery
         run: |
-          pip install cryptography onnx
+          pip install -r tools/voice-training/requirements.txt
           gh release download tts-models -R k2-fsa/sherpa-onnx -p 'vits-piper-en_GB-alba-medium.tar.bz2'
           tar xjf vits-piper-en_GB-alba-medium.tar.bz2
           mkdir -p app/src/androidTest/assets

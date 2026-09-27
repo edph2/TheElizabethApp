@@ -87,7 +87,7 @@ computer:
    file. Inside it, a manifest records whose voice it is, her consent, the base model, and
    checksums of the model and the training data.
    ```
-   pip install cryptography onnx
+   pip install -r tools/voice-training/requirements.txt
    python3 tools/voice-training/package_voice.py --model her-voice.onnx \
        --config her-voice.onnx.json --dataset dataset --espeak-data espeak-ng-data \
        --base-model "<name of the checkpoint>" --name "Elizabeth's voice" --out her-voice.elizvoice
