@@ -15,6 +15,12 @@ class TouchFilter(settings: TouchSettings = TouchSettings()) {
             field = value.sanitised()
         }
 
+    /** What happened on the last event, for touch statistics. */
+    enum class Outcome { NONE, PRESSED, TOO_SHORT, REPEAT_BLOCKED }
+
+    var lastOutcome: Outcome = Outcome.NONE
+        private set
+
     /** The button currently under the finger, after slip filtering. Used for highlighting. */
     var activeTarget: String? = null
         private set
@@ -29,6 +35,7 @@ class TouchFilter(settings: TouchSettings = TouchSettings()) {
     private var lastPressAt = Long.MIN_VALUE / 2
 
     fun onDown(target: String?, timeMs: Long): String? {
+        lastOutcome = Outcome.NONE
         down = true
         firstTarget = target
         activeTarget = target
@@ -40,6 +47,7 @@ class TouchFilter(settings: TouchSettings = TouchSettings()) {
     }
 
     fun onMove(target: String?, timeMs: Long): String? {
+        lastOutcome = Outcome.NONE
         if (!down) return null
         updateTarget(target, timeMs)
         return tick(timeMs)
@@ -47,6 +55,7 @@ class TouchFilter(settings: TouchSettings = TouchSettings()) {
 
     /** Call regularly while the finger is down, so dwell presses fire without movement. */
     fun tick(timeMs: Long): String? {
+        lastOutcome = Outcome.NONE
         if (!down || settings.selectOn != SelectOn.DWELL) return null
         commitPendingIfDue(timeMs)
         val target = activeTarget ?: return null
@@ -55,6 +64,7 @@ class TouchFilter(settings: TouchSettings = TouchSettings()) {
     }
 
     fun onUp(target: String?, timeMs: Long): String? {
+        lastOutcome = Outcome.NONE
         if (!down) return null
         updateTarget(target, timeMs)
         commitPendingIfDue(timeMs)
@@ -62,7 +72,9 @@ class TouchFilter(settings: TouchSettings = TouchSettings()) {
         var result: String? = null
         if (settings.selectOn == SelectOn.RELEASE) {
             val chosen = if (settings.slideToCorrect) activeTarget else firstTarget?.takeIf { it == activeTarget }
-            if (chosen != null && timeMs - activeSince >= settings.minHoldMs) result = press(chosen, timeMs)
+            if (chosen != null) {
+                if (timeMs - activeSince >= settings.minHoldMs) result = press(chosen, timeMs) else lastOutcome = Outcome.TOO_SHORT
+            }
         }
         activeTarget = null
         hasPending = false
@@ -106,9 +118,13 @@ class TouchFilter(settings: TouchSettings = TouchSettings()) {
     }
 
     private fun press(target: String, timeMs: Long): String? {
-        if (timeMs - lastPressAt < settings.repeatGuardMs) return null
+        if (timeMs - lastPressAt < settings.repeatGuardMs) {
+            lastOutcome = Outcome.REPEAT_BLOCKED
+            return null
+        }
         lastPressAt = timeMs
         firedThisTarget = true
+        lastOutcome = Outcome.PRESSED
         return target
     }
 }

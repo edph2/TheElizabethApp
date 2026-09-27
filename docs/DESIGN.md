@@ -1,6 +1,6 @@
 # The Elizabeth App: Design
 
-**Status:** Phase 1 in progress (see the README for what is built) · **Date:** 26 September 2026
+**Status:** Phases 1–3 built, not yet tested on a tablet (see the README). Phase 4 (on-device phrase expansion) not started · **Date:** 26 September 2026
 
 An Android tablet app that lets someone who is losing her speech communicate quickly by
 selecting words and phrases, or by typing. Her messages are spoken aloud in a voice she

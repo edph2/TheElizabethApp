@@ -29,6 +29,10 @@ import uk.elizabeth.aac.core.predict.WordPredictor
 import uk.elizabeth.aac.core.privacy.PinHasher
 import uk.elizabeth.aac.core.privacy.PrivacyEventType
 import uk.elizabeth.aac.core.text.MessageEditor
+import uk.elizabeth.aac.core.touch.Suggestion
+import uk.elizabeth.aac.core.touch.TouchAdvisor
+import uk.elizabeth.aac.core.touch.TouchEvent
+import uk.elizabeth.aac.core.touch.TouchStats
 import uk.elizabeth.aac.core.voice.VoiceManifest
 import uk.elizabeth.aac.core.voicebank.VoiceBank
 import uk.elizabeth.aac.core.voicebank.VoiceConsent
@@ -356,6 +360,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (old.speech != new.speech) configureSpeech(new.speech)
         refreshText()
     }
+
+    // ---- Touch statistics and suggestions ----
+
+    fun recordTouch(event: TouchEvent) {
+        if (!settings.touchStatsEnabled) return
+        updateData { d ->
+            val stats = if (d.touchStats.sinceMillis == 0L) TouchStats(sinceMillis = now()) else d.touchStats
+            d.copy(touchStats = stats.add(event))
+        }
+    }
+
+    fun touchSuggestions(): List<Suggestion> = TouchAdvisor.suggestions(_state.value.data.touchStats, settings)
+
+    fun applySuggestion(suggestion: Suggestion) {
+        updateSettings(suggestion.apply)
+        resetTouchStats()
+        notify("Setting changed. Counting starts again, to see how the change works for her.")
+    }
+
+    fun resetTouchStats() = updateData { it.copy(touchStats = TouchStats()) }
 
     fun testVoice() = speakAloud("Hello. This is how my voice sounds.")
 

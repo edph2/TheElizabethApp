@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import uk.elizabeth.aac.UiState
 import uk.elizabeth.aac.core.keyguard.Keyguard
 import uk.elizabeth.aac.core.model.KeyboardLayout
 import uk.elizabeth.aac.core.scan.ScanMode
+import uk.elizabeth.aac.core.touch.TouchAdvisor
 import uk.elizabeth.aac.core.voice.VoiceManifest
 import java.text.DateFormat
 import java.util.Date
@@ -102,6 +104,37 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, cont
                 SettingSlider("Near-miss distance", touch.snapRadiusDp, 0f..60f, 2f, { "${it.toInt()} dp" },
                     help = "Touches this close to a button count as that button.") { v ->
                     vm.updateSettings { it.copy(touch = it.touch.copy(snapRadiusDp = v)) }
+                }
+            }
+
+            Section("Touch suggestions") {
+                SettingSwitch(
+                    "Count how touches go", s.touchStatsEnabled,
+                    help = "Counts only: presses, corrections straight after a press, and near misses. No words or positions. " +
+                        "Used to suggest touch settings, which you can accept or ignore.",
+                ) { v -> vm.updateSettings { it.copy(touchStatsEnabled = v) } }
+                val stats = state.data.touchStats
+                if (s.touchStatsEnabled || stats.presses > 0) {
+                    Text(
+                        "${stats.presses} presses, ${stats.corrections} corrected straight away, ${stats.snapped} near misses matched, " +
+                            "${stats.missed} missed, ${stats.tooShort} brushes ignored, ${stats.repeatBlocked} double presses ignored.",
+                    )
+                    val suggestions = vm.touchSuggestions()
+                    when {
+                        stats.presses < TouchAdvisor.MIN_PRESSES ->
+                            Text("Suggestions appear after ${TouchAdvisor.MIN_PRESSES} presses.", style = MaterialTheme.typography.bodyMedium)
+                        suggestions.isEmpty() -> Text("No changes suggested: the current settings seem to suit her.")
+                    }
+                    suggestions.forEach { suggestion ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text(suggestion.change, style = MaterialTheme.typography.titleMedium)
+                                Text(suggestion.reason, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Button(onClick = { vm.applySuggestion(suggestion) }) { Text("Apply") }
+                        }
+                    }
+                    OutlinedButton(onClick = vm::resetTouchStats) { Text("Reset counts") }
                 }
             }
 

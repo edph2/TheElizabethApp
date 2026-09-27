@@ -48,6 +48,7 @@ import uk.elizabeth.aac.core.scan.ScanSettings
 import uk.elizabeth.aac.core.scan.Scanner
 import uk.elizabeth.aac.core.touch.Bounds
 import uk.elizabeth.aac.core.touch.TargetRegistry
+import uk.elizabeth.aac.core.touch.TouchEvent
 import uk.elizabeth.aac.core.touch.TouchFilter
 import uk.elizabeth.aac.core.touch.TouchSettings
 
@@ -142,7 +143,21 @@ class TouchController {
         placeholders[id] = Bounds(rect.left, rect.top, rect.right, rect.bottom)
     }
 
-    internal fun down(position: Offset, time: Long) = handle(filter.onDown(hit(position), time), time)
+    /** Receives touch statistics events (counts only), if set. */
+    var onTouchEvent: ((TouchEvent) -> Unit)? = null
+    private var lastPress: Pair<String, Long>? = null
+
+    internal fun down(position: Offset, time: Long) {
+        val target = hit(position)
+        onTouchEvent?.let { report ->
+            when {
+                target == null -> report(TouchEvent.MISSED)
+                registry.hitTest(position.x + origin.x, position.y + origin.y, 0f) == null -> report(TouchEvent.SNAPPED)
+            }
+        }
+        handle(filter.onDown(target, time), time)
+    }
+
     internal fun move(position: Offset, time: Long) = handle(filter.onMove(hit(position), time), time)
     internal fun up(position: Offset, time: Long) = handle(filter.onUp(hit(position), time), time)
     internal fun tick(time: Long) = handle(filter.tick(time), time)
@@ -159,7 +174,26 @@ class TouchController {
     private fun handle(pressed: String?, time: Long) {
         highlighted = filter.activeTarget
         dwellProgress = filter.dwellProgress(time)
+        onTouchEvent?.let { report ->
+            when (filter.lastOutcome) {
+                TouchFilter.Outcome.TOO_SHORT -> report(TouchEvent.TOO_SHORT)
+                TouchFilter.Outcome.REPEAT_BLOCKED -> report(TouchEvent.REPEAT_BLOCKED)
+                else -> Unit
+            }
+            if (pressed != null) {
+                report(TouchEvent.PRESSED)
+                val previous = lastPress
+                if (pressed in correctionButtons && previous != null && previous.first !in correctionButtons && time - previous.second < 3_000) {
+                    report(TouchEvent.CORRECTION)
+                }
+                lastPress = pressed to time
+            }
+        }
         if (pressed != null) actions[pressed]?.invoke()
+    }
+
+    private companion object {
+        val correctionButtons = setOf("undo", "delete-word", "clear", "key-backspace")
     }
 }
 

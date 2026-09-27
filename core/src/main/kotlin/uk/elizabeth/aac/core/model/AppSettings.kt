@@ -39,6 +39,8 @@ data class AppSettings(
     val predictionCount: Int = 5,
     val learningEnabled: Boolean = true,
     val historyEnabled: Boolean = true,
+    /** Count how touches go (counts only), to suggest touch settings. Off until a carer turns it on. */
+    val touchStatsEnabled: Boolean = false,
     val historySize: Int = 200,
     val highContrast: Boolean = true,
     /** Multiplier for text size on buttons and the message bar. */

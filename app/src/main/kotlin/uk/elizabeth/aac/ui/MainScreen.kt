@@ -70,6 +70,7 @@ fun MainScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, controll
     val palette = LocalPalette.current
     val settings = state.data.settings
     controller.applySettings(settings.touch, settings.scan)
+    controller.onTouchEvent = if (settings.touchStatsEnabled) vm::recordTouch else null
     val scale = settings.textScale
     val focus = remember { FocusRequester() }
     val view = LocalView.current
