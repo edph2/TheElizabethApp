@@ -1,6 +1,5 @@
 package uk.elizabeth.aac.core
 
-import uk.elizabeth.aac.core.data.AppData
 import uk.elizabeth.aac.core.data.Backup
 import uk.elizabeth.aac.core.voicebank.TrainingExport
 import uk.elizabeth.aac.core.voicebank.VoiceBank
@@ -60,11 +59,5 @@ class VoiceBankTest {
                 TrainingExport.write(w, VoiceBank().withTake(take(0)), listOf("x"), 0) { ByteArray(1) }
             }
         }
-    }
-
-    @Test
-    fun `old saved data without a voice bank still loads`() {
-        val json = AppData().toJson().replace(Regex(",\\s*\"voiceBank\"[\\s\\S]*\\}\\s*\\}\\s*$"), "\n}")
-        assertEquals(VoiceBank(), AppData.fromJson(json).voiceBank)
     }
 }

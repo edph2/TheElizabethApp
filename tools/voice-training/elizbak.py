@@ -46,7 +46,7 @@ def encrypt_stream(src, dst, passphrase: str) -> None:
 def decrypt_stream(src, dst, passphrase: str) -> None:
     """Decrypts an ELIZBAK2 stream from src into dst, checking every chunk and the end."""
     if src.read(8) != MAGIC:
-        raise ExportError("Not an Elizabeth App file (or an older format)")
+        raise ExportError("Not an Elizabeth App file")
     (iterations,) = struct.unpack(">I", src.read(4))
     salt, prefix = src.read(16), src.read(8)
     aes = _aes(passphrase, salt, iterations)
