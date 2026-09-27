@@ -22,6 +22,11 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Tests (training tools)
+        run: |
+          pip install cryptography
+          python3 -m unittest discover tools/voice-training -v
+
       - name: Unit tests (core)
         run: ./gradlew --no-daemon :core:test
 

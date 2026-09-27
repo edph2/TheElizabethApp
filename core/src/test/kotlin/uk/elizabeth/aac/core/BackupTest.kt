@@ -79,6 +79,14 @@ class BackupTest {
     }
 
     @Test
+    fun `reads files encrypted by the python training tools`() {
+        val bytes = javaClass.getResourceAsStream("/python_encrypted.elizbak")!!.readBytes()
+        val entries = read(bytes)
+        assertEquals("{\"from\":\"python\"}", entries.getValue("appdata.json").decodeToString())
+        assertEquals(70_000, entries.getValue("voice/model.onnx").size)
+    }
+
+    @Test
     fun `chime is audible and not clipped`() {
         val chime = Chime.generate()
         val peak = chime.samples.maxOf { kotlin.math.abs(it.toInt()) }
