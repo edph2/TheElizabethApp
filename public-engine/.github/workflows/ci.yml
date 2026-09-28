@@ -31,6 +31,9 @@ jobs:
       - name: Lint
         run: ./gradlew --no-daemon :engine:lintDebug
 
+      - name: Software bill of materials
+        run: ./gradlew --no-daemon cyclonedxBom
+
       - name: Check the engine has no network permissions
         run: |
           tools/check_no_network.sh engine/build/outputs/apk/debug/engine-debug.apk
@@ -41,6 +44,12 @@ jobs:
         with:
           name: engine-debug-apk
           path: engine/build/outputs/apk/debug/engine-debug.apk
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: build/reports/bom.*
 
       - name: Upload reports
         if: always()

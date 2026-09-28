@@ -15,6 +15,7 @@ buildscript {
     dependencies {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
         classpath("org.jetbrains.kotlin:kotlin-serialization:$kotlinVersion")
+        classpath("org.cyclonedx:cyclonedx-gradle-plugin:1.10.0")
         if (hasAndroidSdk) {
             classpath("com.android.tools.build:gradle:$agpVersion")
             classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:$kotlinVersion")
@@ -25,4 +26,15 @@ buildscript {
 allprojects {
     group = "uk.elizabeth.speech"
     version = "0.1.0"
+}
+
+// Software bill of materials (CycloneDX): every library in the engine, with versions and
+// licences. ./gradlew cyclonedxBom -> build/reports/
+apply(plugin = "org.cyclonedx.bom")
+tasks.named("cyclonedxBom") {
+    // Only what ships in the app, not build tools or test libraries.
+    withGroovyBuilder {
+        "setIncludeConfigs"(listOf("runtimeClasspath", "releaseRuntimeClasspath"))
+        "setSkipConfigs"(listOf(".*[Tt]est.*", "kotlinCompilerClasspath", "kotlinBuildToolsApiClasspath"))
+    }
 }
