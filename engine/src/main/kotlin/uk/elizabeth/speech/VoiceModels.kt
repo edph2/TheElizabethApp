@@ -237,9 +237,15 @@ class PiperVoice(val voice: InstalledVoice) {
      * [onAudio] as soon as it is ready. [onAudio] returns false to stop. [speed] 1.0 is normal.
      */
     fun stream(text: String, speed: Float, onAudio: (ShortArray) -> Boolean) {
-        tts.generateWithCallback(text, 0, speed.coerceIn(0.5f, 2.0f)) { samples ->
-            if (onAudio(toPcm(samples))) 1 else 0
-        }
+        tts.generateWithCallback(text, 0, speed.coerceIn(0.5f, 2.0f), AudioCallback(onAudio))
+    }
+
+    /**
+     * sherpa-onnx's native code calls `invoke(float[]): Integer` by name. A Kotlin lambda has only
+     * the generic `invoke(Object)`, so the callback must be a real class with the typed method.
+     */
+    private class AudioCallback(private val onAudio: (ShortArray) -> Boolean) : (FloatArray) -> Int {
+        override fun invoke(samples: FloatArray): Int = if (onAudio(toPcm(samples))) 1 else 0
     }
 
     /** Synthesises [text] in one go. Call off the main thread. */
@@ -248,7 +254,9 @@ class PiperVoice(val voice: InstalledVoice) {
 
     fun release() = tts.release()
 
-    private fun toPcm(samples: FloatArray) = ShortArray(samples.size) { i ->
-        (samples[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+    private companion object {
+        fun toPcm(samples: FloatArray) = ShortArray(samples.size) { i ->
+            (samples[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+        }
     }
 }
