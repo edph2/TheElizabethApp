@@ -6,6 +6,16 @@ phrases, or types, and the app speaks them aloud. All processing happens on the 
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the full design and roadmap.
 
+It is **two Android apps**:
+
+- **The Elizabeth App** (`app/`, proprietary): the communication app.
+- **Piper Voice Engine** (`engine/`, GPL-3.0-or-later): a standard Android speech engine that
+  speaks with Piper voices, including a voice cloned from her recordings.
+
+The communication app speaks through the engine using Android's standard text-to-speech system,
+and contains no engine code. See [LICENSE.md](LICENSE.md) and
+[docs/SPEECH_ENGINE_API.md](docs/SPEECH_ENGINE_API.md).
+
 ## What works now
 
 **Communicating**
@@ -37,8 +47,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design and roadmap.
 - **Offline speech only:** the Android speech engine, restricted to voices that work
   offline.
 - **Installed voices:** her own voice, a donor's voice, or a published open voice,
-  synthesised on the tablet with sherpa-onnx. A voice is only installed if its consent
-  record (or licence) and checksums check out.
+  synthesised on the tablet by the Piper Voice Engine app (sherpa-onnx). A voice is only
+  installed if its consent record (or licence) and checksums check out.
 - **If speech fails,** the message is shown full-screen.
 - **Message banking:** any phrase can be recorded in her voice, checked for quality, and
   played back exactly as recorded.
@@ -90,8 +100,9 @@ before sharing the app outside the family.
 
 ## Install on the tablet
 
-For real use, install a **signed release build**; see [docs/RELEASE.md](docs/RELEASE.md).
-For trying it out, every CI run also builds a debug APK. Download `elizabeth-debug-apk` from the latest successful
+Install **both apps**: The Elizabeth App and the Piper Voice Engine. For real use, install
+**signed release builds**; see [docs/RELEASE.md](docs/RELEASE.md). For trying it out, every CI
+run also builds debug APKs of both. Download `elizabeth-debug-apk` from the latest successful
 run on the repository's **Actions** tab. Copy it to the tablet, allow installing from that
 source, and open it.
 
@@ -104,14 +115,15 @@ and import it in Settings → Voice. Otherwise choose an offline Android voice t
 Requirements: JDK 17 or later. The Android SDK is only needed for the app itself.
 
 ```
-./gradlew :core:test            # core logic tests; no Android SDK needed
-./gradlew :app:assembleDebug    # needs ANDROID_HOME or local.properties with sdk.dir;
-                                # downloads the pinned sherpa-onnx AAR from GitHub once
+./gradlew :voiceformat:test :core:test   # logic tests; no Android SDK needed
+./gradlew :app:assembleDebug :engine:assembleDebug   # needs ANDROID_HOME or local.properties;
+                                # the engine downloads the pinned sherpa-onnx AAR from GitHub once
 tools/check_no_network.sh app/build/outputs/apk/debug/app-debug.apk
+tools/check_no_gpl.sh app/build/outputs/apk/debug/app-debug.apk   # no engine code in the app
 ```
 
 Every dependency is checked against the SHA-256 in `gradle/verification-metadata.xml`, and
-the sherpa-onnx AAR against the hash pinned in `app/build.gradle.kts`. After changing a
+the sherpa-onnx AAR against the hash pinned in `engine/build.gradle.kts`. After changing a
 dependency, regenerate the metadata and review the diff:
 
 ```
@@ -126,8 +138,11 @@ CI also publishes an SBOM (CycloneDX) listing everything that ships in the app.
 - `core/`: pure Kotlin, unit-tested. Contains touch filtering, the message editor, word
   prediction, the phrase model, settings, the privacy log, PIN hashing, audio quality
   checks and the encrypted export format.
-- `app/`: the Android app (Jetpack Compose). Contains the UI, the Keystore-encrypted
-  storage, text-to-speech, recording and playback.
+- `app/`: the communication app (Jetpack Compose). Contains the UI, the Keystore-encrypted
+  storage, speech through Android's text-to-speech system, recording and playback.
+- `engine/`: the Piper Voice Engine app (GPL). Contains the Android speech-engine service,
+  voice import and checks, and the voice-management provider.
+- `voiceformat/`: the shared encrypted file format and voice manifests (Apache-2.0).
 - `tools/`: the network-permission check, a script that decrypts exports without the
   app, and `voice-training/` (dataset check, Piper training guide, voice packaging).
 - `docs/`: design and data-format documentation.

@@ -89,6 +89,17 @@ recording of her voice.
 - **Restoring on a new tablet:** install the app, then Settings → Privacy and data →
   Restore from a backup.
 
+## The two apps
+
+The tablet has two apps:
+
+- **The Elizabeth App,** which she uses.
+- **The Piper Voice Engine,** which produces the natural voices, including her own.
+
+The engine works in the background, like Android's own speech voice. Voices are imported and
+removed from Settings → Voice. The engine then opens to ask for the voice file's passphrase. If
+the engine app is missing, the tablet's built-in voice is used instead.
+
 ## About the AI in this app (please read)
 
 - **Her voice model is AI-generated.** It is made from her recordings. It will sound like

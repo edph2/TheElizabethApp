@@ -155,15 +155,22 @@ be erased completely. Learning can be paused, for example during a private conve
 
 ### 5.1 Speech engines
 
-The app would talk to speech engines through one internal interface, with two
-implementations:
+The app speaks through **Android's standard text-to-speech system** and contains no speech
+engine of its own. Two kinds of engine can be used:
 
-1. **Embedded sherpa-onnx** (Apache-2.0, from the k2-fsa project) runs **Piper/VITS voice
-   models** (ONNX files) directly in the app. This is the main route. It is fully offline,
-   open source, and can load a custom model of her own voice.
-2. **Android system text-to-speech**, as a fallback. It is restricted to voices that do
+1. **Piper Voice Engine** (a separate app in this repository, `engine/`, GPL-3.0-or-later).
+   It runs **Piper/VITS voice models** (ONNX files) with sherpa-onnx (Apache-2.0) and
+   espeak-ng. This is the main route. It is fully offline, open source, and can load a
+   custom model of her own voice. It is kept as a separate app so that the communication
+   app is not covered by the GPL (see [LICENSE.md](../LICENSE.md)). A signature-protected
+   interface lets the communication app list, back up, restore and remove its voices (see
+   [SPEECH_ENGINE_API.md](SPEECH_ENGINE_API.md)).
+2. **Any other Android speech engine,** as a fallback. It is restricted to voices that do
    not need a network connection (`Voice.isNetworkConnectionRequired == false`, with
    network synthesis disabled).
+
+The voice sounds exactly as it would inside the app: the engine streams the same audio
+through Android, and a device test compares the two.
 
 Rate, pitch and volume are adjustable. Voices are tested on the tablet itself, because
 listeners need to understand her in noisy rooms.
@@ -416,7 +423,7 @@ other than her.*
 |---|---|---|
 | **0 (now, no app needed)** | Message banking and early voice banking with a good microphone | Her voice is time-critical. Everything else can wait. |
 | **1: MVP** | Main screen, quick replies, phrase pages, keyboard, touch filtering, undo, word prediction, offline system TTS, playback of message-banked clips, encrypted storage, export and erase | Useful communication as soon as possible |
-| **2: Her voice** | In-app voice banking with quality checks, the Piper training pipeline, the embedded sherpa-onnx engine, voice consent records | Speak in her own voice |
+| **2: Her voice** | In-app voice banking with quality checks, the Piper training pipeline, the Piper Voice Engine app (sherpa-onnx), voice consent records | Speak in her own voice |
 | **3: Adaptation** | Dwell refinements, switch scanning, keyguard templates, settings suggestions, listener view | Keep her communicating as her abilities decline |
 | **4: Optional** | On-device phrase expansion with an open-weights LLM; regulatory file (DPIA, risk file) if the app is distributed more widely | Extra speed; wider use |
 

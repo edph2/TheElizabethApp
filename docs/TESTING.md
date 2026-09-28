@@ -4,10 +4,11 @@
 
 | Level | What | Where |
 |---|---|---|
-| Core unit tests (JVM) | Touch filtering, message editing, prediction, phrases, paging, history, privacy log, PIN hashing and lockout, audio quality checks, WAV, encrypted export format (tampering, truncation, wrong passphrase), voice banking, training export, voice manifests, scanning, keyguard, touch suggestions, sentence splitting, paper board | `core/src/test` |
+| Voice format tests (JVM) | Encrypted file format (tampering, truncation, wrong passphrase, compatibility with the Python tools), voice manifests | `voiceformat/src/test` |
+| Core unit tests (JVM) | Touch filtering, message editing, prediction, phrases, paging, history, privacy log, PIN hashing and lockout, audio quality checks, WAV, voice banking, training export, scanning, keyguard, touch suggestions, sentence splitting, paper board | `core/src/test` |
 | Python tool tests | Encryption compatible with the app (both directions), dataset checks, packaging trained and published voices with a real ONNX model | `tools/voice-training/test_tools.py` |
-| Build checks | Debug and release builds, Android lint, SBOM, **no network permission in the APK** | `.github/workflows/ci.yml` |
-| Device tests (Android emulator) | See below | `app/src/androidTest` |
+| Build checks | Debug and release builds of both apps, Android lint, SBOM, **no network permission in either APK**, **no GPL engine code in the communication app** | `.github/workflows/ci.yml` |
+| Device tests (Android emulator) | See below | `engine/src/androidTest`, `app/src/androidTest` |
 
 The device tests run on a real Android system (an emulator, API 34):
 
@@ -17,8 +18,15 @@ The device tests run on a real Android system (an emulator, API 34):
   renamed files are detected.
 - **Export → erase → restore gives back identical data.** A wrong passphrase or a
   truncated file changes nothing.
-- **A real published Piper voice** (packaged by `package_voice.py`) imports and produces
-  speech with the sherpa-onnx engine. A wrong passphrase installs nothing.
+- **A real published Piper voice** (packaged by `package_voice.py`) imports into the Piper
+  Voice Engine and produces speech. A wrong passphrase installs nothing.
+- **Same audio through Android's speech system:** speech from the engine via Android's
+  TextToSpeech API matches direct synthesis (identical, or the same length and loudness).
+- **The engine has no network permission,** and its voice-management interface needs the
+  signature permission.
+- **The two apps together:** the communication app installs a voice in the engine, lists it,
+  speaks with it, backs it up and restores it, and removes it. Restoring without the engine
+  reports which voices could not be restored.
 - **The main screen, through the real touch layer:** a deliberate press adds a phrase, a
   brief brush is ignored, and Undo works. Accessibility actions (as used by TalkBack and
   Switch Access) work, as do the keyboard and word prediction.
@@ -26,13 +34,14 @@ The device tests run on a real Android system (an emulator, API 34):
 Run locally with an emulator or a tablet connected:
 
 ```
-./gradlew :core:test
+./gradlew :voiceformat:test :core:test
 python3 -m unittest discover tools/voice-training
-./gradlew :app:connectedDebugAndroidTest
+./gradlew :engine:connectedDebugAndroidTest
+./gradlew :engine:installDebug :app:connectedDebugAndroidTest
 ```
 
-The end-to-end voice test is skipped unless
-`app/src/androidTest/assets/test.elizvoice` exists. CI creates it; see the device-tests
+The voice tests are skipped unless `test.elizvoice` exists in
+`engine/src/androidTest/assets/` and `app/src/androidTest/assets/`. CI creates it; see the device-tests
 job for the commands.
 
 ## By people (needed before relying on it)

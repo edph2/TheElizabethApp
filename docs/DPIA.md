@@ -25,12 +25,23 @@ good practice and Article 25 (data protection by design) applies in spirit throu
 | Recorded phrases (message banking) | Her voice | Tablet, encrypted | Until removed |
 | Voice banking recordings | Her voice (or a donor's) | Tablet, encrypted | Until consent is withdrawn or erased |
 | Consent records | Recorded before voice banking | Tablet, encrypted, and inside exports and voice packages | Kept with the recordings and voices |
-| Installed voice models | Imported by a carer | Tablet, app-private storage (Android's file encryption) | Until removed; removed automatically if consent is withdrawn |
+| Installed voice models | Imported by a carer | Tablet, private storage of the Piper Voice Engine app (Android's file encryption) | Until removed; removed automatically if consent is withdrawn |
 | Touch counts (optional) | How touches go: counts only | Tablet, encrypted | Until reset; off by default |
 | Settings, carer PIN hash, PIN lock state | Carers | Tablet, encrypted | Until changed |
 | Privacy log | App events (no content) | Tablet, encrypted, hash-chained | For the life of the app data |
 
-**No data leaves the tablet on its own.** The app has no internet permission, so Android
+**Two apps.** The system is two apps on the same tablet: The Elizabeth App, and the Piper Voice
+Engine that turns text into speech. Data passes between them only on the tablet, through Android:
+
+- the text of each message, to be spoken (it is not stored by the engine);
+- voice packages, when a backup is made or restored;
+- instructions to remove voices, including when consent is withdrawn.
+
+The engine's voice-management interface is protected by a signature permission, so only apps
+signed with the same key can list, copy, install or remove voices. Other apps can only ask it to
+speak, like any Android speech engine.
+
+**No data leaves the tablet on its own.** Neither app has internet permission, so Android
 does not let it open network connections. This is checked in every CI build, and on a
 real Android system by an instrumented test. Data leaves the tablet only when a carer
 chooses to:
@@ -64,8 +75,8 @@ data" in law. The volume is small: one person, one tablet.
   controls that copy of the recordings for as long as they hold it. The training guide
   requires deleting them afterwards.
 - **If the app is distributed more widely,** the distributor must review this assessment
-  again, along with the medical device and GPL questions in DESIGN.md §7 and
-  THIRD_PARTY_NOTICES.md.
+  again, along with the medical device questions in DESIGN.md §7, and the licensing in
+  LICENSE.md and THIRD_PARTY_NOTICES.md.
 
 ## 5. Purposes
 
@@ -128,7 +139,7 @@ may store backups in a cloud service.
 
 | # | Risk | Likelihood | Severity | Measures | Residual |
 |---|---|---|---|---|---|
-| R1 | Data sent off the tablet without her knowledge | Remote | Severe | No internet permission (checked in CI and on-device); no analytics or crash reporting; backup disabled; offline voices only | Low |
+| R1 | Data sent off the tablet without her knowledge | Remote | Severe | No internet permission in either app (checked in CI and on-device); no analytics or crash reporting; backup disabled; offline voices only | Low |
 | R2 | Tablet lost or stolen, data read | Possible | Significant | Android screen lock (recommended); Android file encryption; app data encrypted with a Keystore key; release builds not debuggable | Low |
 | R3 | Someone nearby changes settings or reads history | Possible | Moderate | Settings need a 2-second hold and optional PIN; PIN lockout after 5 wrong attempts; history can be switched off | Low |
 | R4 | Her cloned voice misused (e.g. a deepfake) | Remote | Severe | Synthesised speech is never saved to a file; voice packages are encrypted and must carry a consent record; withdrawing consent removes voices made from the recordings; training data deleted after use | Low |
@@ -138,6 +149,7 @@ may store backups in a cloud service.
 | R11 | Encrypted backup in cloud storage is obtained by others | Possible | Significant | Encryption before upload; strong passphrase kept separately; metadata limited to file name, size and date | Low |
 | R8 | Donor's voice used without valid consent | Remote | Significant | Consent statement recorded before voice banking; a voice without consent is refused on import | Low |
 | R9 | Malicious voice package or library | Remote | Significant | Checksums verified; unsafe file names refused; the speech library pinned by SHA-256; SBOM published | Low |
+| R12 | Another app on the tablet copies or removes her voice models | Remote | Severe | The engine's voice-management interface requires a signature permission held only by apps signed with the same key; other apps can only request speech | Low |
 | R10 | Speech failure leaves her unable to communicate | Possible | Severe (safety) | Large-text fallback, attention chime, the Android voice as back-up, home-screen mode to return after a crash, paper board | Low |
 
 ## 9. Outcome

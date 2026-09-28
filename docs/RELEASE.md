@@ -1,6 +1,9 @@
-# Installing on her tablet (signed release builds)
+# Installing on a tablet (signed release builds)
 
-Use a **signed release build** for real use:
+There are two apps: **The Elizabeth App** and the **Piper Voice Engine**. Both must be signed
+with **the same key**, because only apps signed with the engine's key may manage its voices.
+
+Use **signed release builds** for real use:
 
 - **Updates keep her data.** A new version can only install over the old one, keeping
   her data, if both are signed with the same key.
@@ -36,14 +39,20 @@ Go to Actions → **Release APK** → **Run workflow** (or push a tag such as `v
 workflow:
 1. runs the tests;
 2. builds and signs the APK;
-3. checks it is signed, not debuggable, and requests no network permission;
-4. publishes `elizabeth-release-apk` (the APK plus its SHA-256).
+3. checks that each is signed, not debuggable, and requests no network permission, and that
+   the communication app contains no GPL engine code;
+4. publishes `elizabeth-release-apk`: both APKs, plus their SHA-256 checksums.
 
 ## Installing
 
-1. Download the artifact and check the APK's SHA-256 against the `.sha256` file.
-2. Copy the APK to the tablet by USB. Open it and allow installing from that source
-   when asked.
+1. Download the artifact and check both APKs' SHA-256 against the `.sha256` file.
+2. Copy both APKs to the tablet by USB. Open each, and allow installing from that source
+   when asked. The order does not matter.
 3. Set a screen lock on the tablet (Android Settings → Security).
 4. Open the app. In Settings → Always available, consider making it the home screen.
-5. Updates: install newer release APKs the same way. Her data is kept.
+5. Updates: install newer release APKs the same way. Data is kept.
+
+**Publishing the engine's source:** the engine is GPL-licensed. Everyone who receives it must be
+able to get its complete source (`engine/` and `voiceformat/`), for example from a public
+repository. Set `source_url` in `engine/src/main/res/values/strings.xml` to that address. See
+[LICENSE.md](../LICENSE.md).
