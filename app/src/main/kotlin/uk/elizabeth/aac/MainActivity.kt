@@ -59,6 +59,12 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent { App(vm) }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Voices may have been imported or removed in the Piper Voice Engine app meanwhile.
+        vm.refreshVoices()
+    }
 }
 
 @Composable

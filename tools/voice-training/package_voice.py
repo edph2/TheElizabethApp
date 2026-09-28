@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Packages a Piper voice for The Elizabeth App (".elizvoice"), encrypted with a passphrase.
 
 Her own (or a donor's) trained voice:
@@ -56,6 +57,15 @@ def sherpa_metadata(config: dict) -> dict:
     }
 
 
+def locale_of(config: dict) -> str:
+    """BCP 47 tag from the Piper config's espeak voice, e.g. en-gb-x-rp -> en-GB."""
+    voice = config.get("espeak", {}).get("voice", "en-gb").lower()
+    parts = voice.split("-")
+    if len(parts) >= 2 and len(parts[1]) == 2:
+        return f"{parts[0]}-{parts[1].upper()}"
+    return {"en": "en-GB"}.get(parts[0], parts[0])
+
+
 def write_tokens(config: dict, path: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
         for symbol, ids in config["phoneme_id_map"].items():
@@ -92,6 +102,7 @@ def prepare_trained(args, work: str):
         "consent": consent,
         "baseModel": args.base_model,
         "sampleRate": config["audio"]["sample_rate"],
+        "locale": locale_of(config),
         "trainingDataManifestSha256": sha256_file(os.path.join(args.dataset, "manifest.json")),
         "trainingUtterances": data_manifest.get("utterances"),
         "trainingSeconds": data_manifest.get("totalSeconds"),
@@ -106,10 +117,12 @@ def prepare_stock(args):
     if len(models) != 1:
         raise SystemExit(f"Expected one .onnx model in {d}")
     config_path = os.path.join(d, models[0] + ".json")
-    rate = 22050
+    rate, locale = 22050, "en-GB"
     if os.path.exists(config_path):
         with open(config_path, encoding="utf-8") as f:
-            rate = json.load(f).get("audio", {}).get("sample_rate", rate)
+            config = json.load(f)
+        rate = config.get("audio", {}).get("sample_rate", rate)
+        locale = locale_of(config)
     if not args.licence:
         raise SystemExit("--licence is required for a published voice (see its MODEL_CARD)")
     manifest = {
@@ -118,6 +131,7 @@ def prepare_stock(args):
         "licence": args.licence,
         "baseModel": models[0][:-5],
         "sampleRate": rate,
+        "locale": locale,
         "syntheticVoiceNotice": "This is an AI-generated voice.",
     }
     return os.path.join(d, models[0]), os.path.join(d, "tokens.txt"), os.path.join(d, "espeak-ng-data"), manifest

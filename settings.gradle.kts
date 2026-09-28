@@ -16,11 +16,12 @@ dependencyResolutionManagement {
 
 rootProject.name = "TheElizabethApp"
 
-// The pure-Kotlin core (touch filtering, prediction, privacy log) always builds.
-// The Android app is only included when an Android SDK is present, so the core
+// The pure-Kotlin modules always build: voiceformat (Apache-2.0, shared) and core (the
+// app's logic). The Android apps (the app, and the GPL speech engine) are only included
+// when an Android SDK is present, so the core
 // can be built and tested on any machine with a JDK.
-include(":core")
-if (androidSdkAvailable()) include(":app")
+include(":voiceformat", ":core")
+if (androidSdkAvailable()) include(":app", ":engine")
 
 fun androidSdkAvailable(): Boolean {
     if (System.getenv("ANDROID_HOME") != null || System.getenv("ANDROID_SDK_ROOT") != null) return true

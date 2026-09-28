@@ -1,9 +1,9 @@
 package uk.elizabeth.aac.core
 
-import uk.elizabeth.aac.core.data.Backup
+import uk.elizabeth.voiceformat.Backup
 import uk.elizabeth.aac.core.voicebank.TrainingExport
 import uk.elizabeth.aac.core.voicebank.VoiceBank
-import uk.elizabeth.aac.core.voicebank.VoiceConsent
+import uk.elizabeth.voiceformat.VoiceConsent
 import uk.elizabeth.aac.core.voicebank.VoiceTake
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Checks a voice banking dataset exported from The Elizabeth App before training.
 
 Usage: python3 verify_dataset.py DATASET_DIR

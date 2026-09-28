@@ -39,18 +39,20 @@ jobs:
           ELIZABETH_KEYSTORE_PASSWORD: ${{ secrets.ELIZABETH_KEYSTORE_PASSWORD }}
           ELIZABETH_KEY_ALIAS: ${{ secrets.ELIZABETH_KEY_ALIAS }}
           ELIZABETH_KEY_PASSWORD: ${{ secrets.ELIZABETH_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon :core:test :app:assembleRelease
+        run: ./gradlew --no-daemon :voiceformat:test :core:test :app:assembleRelease :engine:assembleRelease
 
-      - name: Check signature, debuggable flag and network permissions
+      - name: Check signatures, debuggable flag, network permissions and GPL separation
         run: |
-          apk=app/build/outputs/apk/release/app-release.apk
           bt="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
-          "$bt/apksigner" verify --print-certs "$apk"
-          if "$bt/aapt2" dump badging "$apk" | grep -q "application-debuggable"; then
-            echo "::error::Release APK is debuggable" && exit 1
-          fi
-          tools/check_no_network.sh "$apk"
-          sha256sum "$apk" | tee app-release.apk.sha256
+          for apk in app/build/outputs/apk/release/app-release.apk engine/build/outputs/apk/release/engine-release.apk; do
+            "$bt/apksigner" verify --print-certs "$apk"
+            if "$bt/aapt2" dump badging "$apk" | grep -q "application-debuggable"; then
+              echo "::error::$apk is debuggable" && exit 1
+            fi
+            tools/check_no_network.sh "$apk"
+          done
+          tools/check_no_gpl.sh app/build/outputs/apk/release/app-release.apk
+          sha256sum app/build/outputs/apk/release/app-release.apk engine/build/outputs/apk/release/engine-release.apk | tee release-apks.sha256
 
       - name: Remove the key
         if: always()
@@ -61,4 +63,5 @@ jobs:
           name: elizabeth-release-apk
           path: |
             app/build/outputs/apk/release/app-release.apk
-            app-release.apk.sha256
+            engine/build/outputs/apk/release/engine-release.apk
+            release-apks.sha256

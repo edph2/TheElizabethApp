@@ -107,7 +107,7 @@ fun MainScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, controll
             .focusRequester(focus)
             .focusable(),
     ) {
-        StatusStrip(speaker, state.customSpeaking) {
+        StatusStrip(speaker) {
             controller.saveLayout() // for the keyguard template, which is made from Settings
             onOpenSettings()
         }
@@ -327,7 +327,7 @@ private fun Keyboard(state: UiState, controller: TouchController, vm: AppViewMod
  * which must be held for 2 seconds so it is never opened by accident.
  */
 @Composable
-private fun StatusStrip(speaker: SpeakerState, customSpeaking: Boolean, onOpenSettings: () -> Unit) {
+private fun StatusStrip(speaker: SpeakerState, onOpenSettings: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
     var warnings by remember { mutableStateOf(emptyList<String>()) }
@@ -342,7 +342,7 @@ private fun StatusStrip(speaker: SpeakerState, customSpeaking: Boolean, onOpenSe
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(if (speaker.speaking || customSpeaking) "🔊 Speaking…" else "", color = palette.statusText, fontSize = 18.sp, modifier = Modifier.width(150.dp))
+        Text(if (speaker.speaking) "🔊 Speaking…" else "", color = palette.statusText, fontSize = 18.sp, modifier = Modifier.width(150.dp))
         Text(
             warnings.joinToString("   ·   ") { "⚠ $it" },
             color = palette.highlight,

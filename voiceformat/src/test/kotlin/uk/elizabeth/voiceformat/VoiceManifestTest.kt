@@ -1,7 +1,6 @@
-package uk.elizabeth.aac.core
+// SPDX-License-Identifier: Apache-2.0
+package uk.elizabeth.voiceformat
 
-import uk.elizabeth.aac.core.data.Backup
-import uk.elizabeth.aac.core.voice.VoiceManifest
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.test.Test

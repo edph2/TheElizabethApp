@@ -7,12 +7,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import uk.elizabeth.aac.core.data.AppData
-import uk.elizabeth.aac.core.data.Backup
+import uk.elizabeth.voiceformat.Backup
 import uk.elizabeth.aac.core.data.BackupInfo
 import uk.elizabeth.aac.core.voicebank.TrainingExport
 import uk.elizabeth.aac.core.voicebank.VoiceBank
-import uk.elizabeth.aac.speech.InstalledVoice
-import uk.elizabeth.aac.speech.VoiceModels
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -20,7 +18,7 @@ import java.io.OutputStream
 /** Result of loading stored data. [problem] is set if saved data could not be read. */
 class LoadResult(val data: AppData, val wordModel: String, val isFirstRun: Boolean, val problem: String?)
 
-/** Result of restoring an export. [failedVoices] names voices in the backup that did not pass their checks. */
+/** Result of restoring an export. [failedVoices] lists voices in the backup that could not be installed. */
 class RestoreResult(val data: AppData, val wordModel: String, val info: BackupInfo, val failedVoices: List<String> = emptyList())
 
 /**
@@ -76,22 +74,23 @@ class Repository(context: Context) {
     // ---- Export, restore, erase ----
 
     /**
-     * Writes the encrypted export of everything to [out], and closes it. Installed voice
-     * models are included if [voices] is not empty (they are large, but make one file enough
-     * to restore everything). Returns what the backup contains.
+     * Writes the encrypted export of everything to [out], and closes it. Voices installed in the
+     * speech engine app are included if [voiceIds] is not empty, each streamed from [openVoice]
+     * (they are large, but make one file enough to restore everything). Returns what the backup
+     * contains.
      */
     suspend fun exportBackup(
         out: OutputStream,
         data: AppData,
         wordModel: String,
         passphrase: CharArray,
-        voiceModels: VoiceModels,
-        voices: List<InstalledVoice>,
+        voiceIds: List<String>,
+        openVoice: (String) -> InputStream,
         now: Long,
     ): BackupInfo = io {
         val recordings = ids(RECORDING)
         val takes = ids(VOICE)
-        val info = BackupInfo(now, recordings.size, takes.size, voices.size)
+        val info = BackupInfo(now, recordings.size, takes.size, voiceIds.size)
         Backup.write(out, passphrase) { w ->
             w.put(Backup.README_NAME, Backup.README)
             w.put(Backup.INFO, info.toJson())
@@ -99,9 +98,7 @@ class Repository(context: Context) {
             w.put(Backup.WORDS, wordModel)
             for (id in recordings) store.read(file(RECORDING, id))?.let { w.put(Backup.recordingEntry(id), it) }
             for (id in takes) store.read(file(VOICE, id))?.let { w.put(Backup.voiceBankEntry(id), it) }
-            for (voice in voices) {
-                for ((path, f) in voiceModels.files(voice)) f.inputStream().use { w.put(Backup.voiceModelEntry(voice.id, path), it) }
-            }
+            for (id in voiceIds) openVoice(id).use { w.put(Backup.voicePackageEntry(id), it) }
         }
         info
     }
@@ -115,25 +112,31 @@ class Repository(context: Context) {
     /**
      * Replaces all stored data with a backup. [open] must open the backup afresh each time it
      * is called: the file is read once to check it completely (wrong passphrase, damage,
-     * truncation) before anything is changed, then again to restore it. Voices in the backup
-     * replace installed voices with the same id; other installed voices are kept.
-     * Returns the restored data and the names of any voices that could not be restored.
+     * truncation) before anything is changed, then again to restore it. Voices in the backup are
+     * passed to [installVoice] (the speech engine app checks and installs them, replacing any with
+     * the same id; other installed voices are kept). If [installVoice] is null (the engine app is
+     * missing), voices are reported as not restored.
      */
-    suspend fun restoreBackup(open: () -> InputStream, passphrase: CharArray, voiceModels: VoiceModels): RestoreResult = io {
+    suspend fun restoreBackup(
+        open: () -> InputStream,
+        passphrase: CharArray,
+        installVoice: ((String, InputStream) -> Unit)?,
+    ): RestoreResult = io {
         val info = open().use { scan(it, passphrase) }
 
         ids(RECORDING).forEach { store.delete(file(RECORDING, it)) }
         ids(VOICE).forEach { store.delete(file(VOICE, it)) }
-        voiceModels.discardPartial()
         var data: AppData? = null
         var words = ""
+        val failedVoices = mutableListOf<String>()
         open().use { input ->
             Backup.readStreaming(input, passphrase) { name, stream ->
                 if (!Backup.isSafeRelativePath(name)) return@readStreaming
                 when {
-                    name.startsWith(Backup.VOICES_PREFIX) -> {
-                        val rest = name.removePrefix(Backup.VOICES_PREFIX)
-                        voiceModels.restoreFile(rest.substringBefore('/'), rest.substringAfter('/'), stream)
+                    name.startsWith(Backup.VOICES_PREFIX) && name.endsWith(".zip") -> {
+                        val id = name.removePrefix(Backup.VOICES_PREFIX).removeSuffix(".zip")
+                        val installed = installVoice != null && runCatching { installVoice(id, stream) }.isSuccess
+                        if (!installed) failedVoices += id
                     }
                     name == Backup.APP_DATA -> data = AppData.fromJson(stream.readBytes().decodeToString())
                     name == Backup.WORDS -> words = stream.readBytes().decodeToString()
@@ -142,7 +145,6 @@ class Repository(context: Context) {
                 }
             }
         }
-        val failedVoices = voiceModels.finishRestore()
         val restored = data ?: throw IOException("This backup has no settings in it")
         store.write(WORDS, words.toByteArray())
         store.write(APP_DATA, restored.toJson().toByteArray())
@@ -165,7 +167,7 @@ class Repository(context: Context) {
                 }
                 name.startsWith("recordings/") -> recordings++
                 name.startsWith("voicebank/") -> takes++
-                name.startsWith(Backup.VOICES_PREFIX) -> voices += name.removePrefix(Backup.VOICES_PREFIX).substringBefore('/')
+                name.startsWith(Backup.VOICES_PREFIX) && name.endsWith(".zip") -> voices += name
             }
             stream.skip(Long.MAX_VALUE)
             while (stream.read() >= 0) Unit // read to the end so every chunk is checked

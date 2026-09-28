@@ -28,27 +28,36 @@ jobs:
           python3 -m unittest discover tools/voice-training -v
 
       - name: Unit tests (core)
-        run: ./gradlew --no-daemon :core:test
+        run: ./gradlew --no-daemon :voiceformat:test :core:test
 
       - name: Build app
-        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease
+        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease :engine:assembleDebug :engine:assembleRelease
 
       - name: Lint
-        run: ./gradlew --no-daemon :app:lintDebug
+        run: ./gradlew --no-daemon :app:lintDebug :engine:lintDebug
 
       - name: Software bill of materials
         run: ./gradlew --no-daemon cyclonedxBom
 
-      - name: Check the app has no network permissions
+      - name: Check neither app has network permissions
         run: |
           tools/check_no_network.sh app/build/outputs/apk/debug/app-debug.apk
           tools/check_no_network.sh app/build/outputs/apk/release/app-release-unsigned.apk
+          tools/check_no_network.sh engine/build/outputs/apk/debug/engine-debug.apk
+          tools/check_no_network.sh engine/build/outputs/apk/release/engine-release-unsigned.apk
 
-      - name: Upload debug APK
+      - name: Check the app contains no GPL speech-engine code
+        run: |
+          tools/check_no_gpl.sh app/build/outputs/apk/debug/app-debug.apk
+          tools/check_no_gpl.sh app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Upload debug APKs
         uses: actions/upload-artifact@v4
         with:
           name: elizabeth-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            engine/build/outputs/apk/debug/engine-debug.apk
 
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
@@ -89,10 +98,11 @@ jobs:
           pip install -r tools/voice-training/requirements.txt
           gh release download tts-models -R k2-fsa/sherpa-onnx -p 'vits-piper-en_GB-alba-medium.tar.bz2'
           tar xjf vits-piper-en_GB-alba-medium.tar.bz2
-          mkdir -p app/src/androidTest/assets
+          mkdir -p app/src/androidTest/assets engine/src/androidTest/assets
           python3 tools/voice-training/package_voice.py --sherpa-dir vits-piper-en_GB-alba-medium \
             --licence "test only (see MODEL_CARD)" --passphrase-env TEST_VOICE_PASSPHRASE \
-            --out app/src/androidTest/assets/test.elizvoice
+            --out engine/src/androidTest/assets/test.elizvoice
+          cp engine/src/androidTest/assets/test.elizvoice app/src/androidTest/assets/test.elizvoice
 
       - name: Enable KVM
         run: |
@@ -107,11 +117,16 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
+          # The engine's own tests, then the app's tests with the engine installed (as on a real tablet).
+          script: |
+            ./gradlew --no-daemon :engine:connectedDebugAndroidTest
+            ./gradlew --no-daemon :engine:installDebug :app:connectedDebugAndroidTest
 
       - name: Upload device test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: device-test-reports
-          path: app/build/reports/androidTests
+          path: |
+            app/build/reports/androidTests
+            engine/build/reports/androidTests

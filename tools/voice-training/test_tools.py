@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the training tools. Run: python3 -m unittest discover tools/voice-training"""
 import hashlib
 import io
@@ -104,6 +105,8 @@ class ToolsTest(unittest.TestCase):
             z = self._open(out)
             manifest = json.loads(z.read("voice/manifest.json"))
             self.assertEqual("own", manifest["kind"])
+            self.assertEqual("en-GB", manifest["locale"])
+            self.assertEqual("en-US", package_voice.locale_of({"espeak": {"voice": "en-us"}}))
             self.assertEqual("Elizabeth", manifest["speakerName"])
             self.assertEqual(hashlib.sha256(z.read("voice/model.onnx")).hexdigest(), manifest["modelSha256"])
             self.assertEqual("_ 0\n^ 1\n  3\n", z.read("voice/tokens.txt").decode())

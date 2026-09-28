@@ -1,4 +1,5 @@
-package uk.elizabeth.aac.core.data
+// SPDX-License-Identifier: Apache-2.0
+package uk.elizabeth.voiceformat
 
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -73,7 +74,8 @@ object Backup {
     fun recordingEntry(id: String) = "recordings/$id.wav"
     fun voiceBankEntry(id: String) = "voicebank/$id.wav"
     const val VOICES_PREFIX = "voices/"
-    fun voiceModelEntry(id: String, relativePath: String) = "$VOICES_PREFIX$id/$relativePath"
+    /** An installed voice, as the plain voice-package ZIP exported by the speech engine. */
+    fun voicePackageEntry(id: String) = "$VOICES_PREFIX$id.zip"
 
     /** A file name that sorts by date, so the newest backup is easy to find. */
     fun suggestedFileName(prefix: String, date: java.time.LocalDate) = "$prefix-$date.elizbak"
@@ -83,7 +85,7 @@ appdata.json   settings, phrases, message history, voice bank progress and the p
 words.txt      words the app has learned for prediction (tab-separated text)
 recordings/    phrases recorded in her voice (16-bit mono WAV)
 voicebank/     voice banking recordings (16-bit mono WAV); the sentence for each is in appdata.json
-voices/        installed voice models, if included (Piper ONNX model, phoneme table, pronunciation data)
+voices/        installed voices, if included: one plain voice-package ZIP per voice (voice/manifest.json, model, phoneme table, pronunciation data)
 backup-info.json  when the backup was made and what it contains
 """
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Decrypts an Elizabeth App export (.elizbak) into a plain ZIP file, without the app.
 
 Usage: python3 decrypt_export.py elizabeth-export.elizbak output.zip

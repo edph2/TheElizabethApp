@@ -1,8 +1,8 @@
-package uk.elizabeth.aac.core.voice
+// SPDX-License-Identifier: Apache-2.0
+package uk.elizabeth.voiceformat
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import uk.elizabeth.aac.core.voicebank.VoiceConsent
 
 /**
  * Describes a voice model packaged by tools/voice-training/package_voice.py (".elizvoice").
@@ -25,6 +25,8 @@ data class VoiceManifest(
     val licence: String? = null,
     val baseModel: String? = null,
     val sampleRate: Int = 22050,
+    /** BCP 47 language tag of the voice, e.g. en-GB. */
+    val locale: String = "en-GB",
     val createdAtMillis: Long = 0,
     val modelSha256: String,
     val tokensSha256: String,

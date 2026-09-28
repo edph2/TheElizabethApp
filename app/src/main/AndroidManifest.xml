@@ -14,11 +14,24 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
-    <!-- Lets the app list the speech engines installed on the tablet. -->
+    <!--
+        The Piper Voice Engine is a separate app (GPL). This app speaks through it with Android's
+        standard TextToSpeech API, and manages its voices (list, back up, restore, remove) through
+        its provider, which only apps signed with the same key may use. The permission is declared
+        here too, so the two apps can be installed in either order.
+    -->
+    <permission
+        android:name="uk.elizabeth.speech.permission.MANAGE_VOICES"
+        android:label="Manage installed voices"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="uk.elizabeth.speech.permission.MANAGE_VOICES" />
+
+    <!-- Lets the app find the speech engines installed on the tablet, including the Piper Voice Engine. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <package android:name="uk.elizabeth.speech" />
     </queries>
 
     <application

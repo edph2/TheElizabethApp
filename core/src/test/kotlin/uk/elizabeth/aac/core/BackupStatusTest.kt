@@ -1,7 +1,7 @@
 package uk.elizabeth.aac.core
 
 import uk.elizabeth.aac.core.data.AppData
-import uk.elizabeth.aac.core.data.Backup
+import uk.elizabeth.voiceformat.Backup
 import uk.elizabeth.aac.core.data.BackupInfo
 import uk.elizabeth.aac.core.data.BackupReminder
 import uk.elizabeth.aac.core.data.BackupStatus
@@ -47,13 +47,15 @@ class BackupStatusTest {
         val big = ByteArray(3_000_000) { (it % 251).toByte() }
         Backup.write(out, "correct horse".toCharArray()) { w ->
             w.put(Backup.INFO, BackupInfo(5, 1, 2, 1).toJson())
-            w.put(Backup.voiceModelEntry("id1", "espeak-ng-data/voices/!v/Mr serious"), ByteArrayInputStream(big))
+            w.put(Backup.voicePackageEntry("id1"), ByteArrayInputStream(big))
+            w.put("voices/nested/espeak-ng-data/voices/!v/Mr serious", ByteArrayInputStream(big))
         }
         val seen = HashMap<String, Int>()
         Backup.readStreaming(ByteArrayInputStream(out.toByteArray()), "correct horse".toCharArray()) { name, data ->
             seen[name] = data.readBytes().size
         }
-        assertEquals(3_000_000, seen["voices/id1/espeak-ng-data/voices/!v/Mr serious"])
+        assertEquals(3_000_000, seen["voices/id1.zip"])
+        assertEquals(3_000_000, seen["voices/nested/espeak-ng-data/voices/!v/Mr serious"])
         assertEquals(BackupInfo(5, 1, 2, 1), BackupInfo.parse(BackupInfo(5, 1, 2, 1).toJson()))
     }
 }

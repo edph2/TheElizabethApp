@@ -1,8 +1,6 @@
-package uk.elizabeth.aac.core
+// SPDX-License-Identifier: Apache-2.0
+package uk.elizabeth.voiceformat
 
-import uk.elizabeth.aac.core.audio.Chime
-import uk.elizabeth.aac.core.data.Backup
-import uk.elizabeth.aac.core.data.WrongPassphraseException
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -84,13 +82,5 @@ class BackupTest {
         val entries = read(bytes)
         assertEquals("{\"from\":\"python\"}", entries.getValue("appdata.json").decodeToString())
         assertEquals(70_000, entries.getValue("voice/model.onnx").size)
-    }
-
-    @Test
-    fun `chime is audible and not clipped`() {
-        val chime = Chime.generate()
-        val peak = chime.samples.maxOf { kotlin.math.abs(it.toInt()) }
-        assertTrue(peak in 15_000..32_000)
-        assertTrue(chime.durationMs in 1390..1410)
     }
 }

@@ -1,4 +1,6 @@
-package uk.elizabeth.aac
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Piper Voice Engine. Free software under the GNU GPL v3 or later: see engine/LICENSE.
+package uk.elizabeth.speech
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -9,8 +11,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import uk.elizabeth.aac.speech.PiperVoice
-import uk.elizabeth.aac.speech.VoiceModels
 import kotlin.math.sqrt
 
 /**
@@ -40,10 +40,11 @@ class VoiceEngineTest {
 
         val piper = PiperVoice(voice)
         try {
-            val audio = piper.synthesize("Hello. Could I have a cup of tea, please?", 1.0f)
-            assertEquals(22050, audio.sampleRate)
-            assertTrue("too short: ${audio.durationMs} ms", audio.durationMs > 1_000)
-            val rms = sqrt(audio.samples.sumOf { it.toDouble() * it } / audio.samples.size)
+            val samples = piper.synthesize("Hello. Could I have a cup of tea, please?", 1.0f)
+            assertEquals(22050, piper.sampleRate)
+            val ms = samples.size * 1000L / piper.sampleRate
+            assertTrue("too short: $ms ms", ms > 1_000)
+            val rms = sqrt(samples.sumOf { it.toDouble() * it } / samples.size)
             assertTrue("silent output (rms $rms)", rms > 300)
         } finally {
             piper.release()
@@ -63,8 +64,9 @@ class VoiceEngineTest {
             val voice = assets.open(TEST_VOICE).use { models.import(it, PASSPHRASE.toCharArray()) }
             val piper = PiperVoice(voice)
             try {
-                val audio = piper.synthesize("Could I have a cup of tea with a little milk, please?", 1.0f)
-                assertTrue("round ${it + 1}: too short: ${audio.durationMs} ms", audio.durationMs > 1_500)
+                val samples = piper.synthesize("Could I have a cup of tea with a little milk, please?", 1.0f)
+                val ms = samples.size * 1000L / piper.sampleRate
+                assertTrue("round ${it + 1}: too short: $ms ms", ms > 1_500)
             } finally {
                 piper.release()
             }

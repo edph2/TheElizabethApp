@@ -38,7 +38,8 @@ import uk.elizabeth.aac.core.model.KeyboardLayout
 import uk.elizabeth.aac.core.print.PaperBoard
 import uk.elizabeth.aac.core.scan.ScanMode
 import uk.elizabeth.aac.core.touch.TouchAdvisor
-import uk.elizabeth.aac.core.voice.VoiceManifest
+import uk.elizabeth.aac.speech.EngineClient
+import uk.elizabeth.aac.speech.EngineVoice
 import java.text.DateFormat
 import java.util.Date
 import uk.elizabeth.aac.core.touch.SelectOn
@@ -53,8 +54,13 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, cont
     var pinDialog by remember { mutableStateOf(false) }
     var allLanguages by remember { mutableStateOf(false) }
     var deleteVoice by remember { mutableStateOf<String?>(null) }
-    var voiceUri by remember { mutableStateOf<android.net.Uri?>(null) }
-    val importVoice = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> voiceUri = uri }
+    // The engine app imports the file: it asks for the passphrase and checks the voice.
+    val importVoice = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.startActivity(EngineClient(context).importIntent(uri)) }
+                .onFailure { vm.showNotice("Could not open the Piper Voice Engine app.") }
+        }
+    }
     val saveKeyguard = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/svg+xml")) { uri ->
         if (uri != null) vm.saveKeyguard(uri, keyguardSvg(context, controller))
     }
@@ -217,26 +223,37 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, cont
             }
 
             Section("Voice") {
-                Text("Voices on this tablet", style = MaterialTheme.typography.titleMedium)
-                RadioGroup(
-                    listOf<Pair<String?, String>>(null to "The tablet's own speech voice (chosen below)") +
-                        state.installedVoices.map { v -> v.id to describeVoice(v.manifest) },
-                    s.speech.customVoiceId,
-                ) { v -> vm.updateSettings { it.copy(speech = it.speech.copy(customVoiceId = v)) } }
-                state.installedVoices.forEach { v ->
-                    OutlinedButton(onClick = { deleteVoice = v.id }) { Text("Remove \"${v.manifest.name}\"") }
+                val engine = remember { EngineClient(context) }
+                if (!state.engineInstalled) {
+                    Text(
+                        "Natural voices, including her own, need the free Piper Voice Engine app. Install it from the same " +
+                            "place as this app; this app then speaks through it. Until then, the tablet's own speech voice is used.",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                } else {
+                    Text("Voices in the Piper Voice Engine", style = MaterialTheme.typography.titleMedium)
+                    val selected = if (s.speech.enginePackage == EngineClient.PACKAGE) s.speech.voiceName else null
+                    RadioGroup(
+                        listOf<Pair<String?, String>>(null to "The tablet's own speech voice (chosen below)") +
+                            state.installedVoices.map { v -> v.id to describeVoice(v) },
+                        selected,
+                    ) { v -> vm.chooseVoice(v) }
+                    state.installedVoices.forEach { v ->
+                        OutlinedButton(onClick = { deleteVoice = v.id }) { Text("Remove \"${v.name}\"") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = { importVoice.launch(arrayOf("*/*")) }) { Text("Import a voice (.elizvoice)") }
+                        OutlinedButton(onClick = { engine.openEngineIntent()?.let { context.startActivity(it) } }) { Text("Open the voice engine") }
+                    }
+                    Text(
+                        "Voices run entirely on this tablet, in the Piper Voice Engine app. A voice made from someone's " +
+                            "recordings is only accepted with their consent record inside it.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { importVoice.launch(arrayOf("*/*")) }) { Text("Import a voice (.elizvoice)") }
-                    Button(onClick = vm::testVoice) { Text("Test voice") }
-                }
-                Text(
-                    "Installed voices run entirely on this tablet. A voice made from someone's recordings is only " +
-                        "accepted with their consent record inside it.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text("The tablet's own speech voice", style = MaterialTheme.typography.titleMedium)
-                Text("Used when no installed voice is chosen, and as a back-up. Only voices that work without the internet are listed.", style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = vm::testVoice) { Text("Test voice") }
+                Text("Other speech engines and voices", style = MaterialTheme.typography.titleMedium)
+                Text("Only voices that work without the internet are listed.", style = MaterialTheme.typography.bodyMedium)
                 if (speaker.engines.size > 1) {
                     Text("Speech engine")
                     RadioGroup(listOf<Pair<String?, String>>(null to "System default") + speaker.engines.map { it.packageName to it.label }, s.speech.enginePackage) { v ->
@@ -306,12 +323,6 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, cont
         }
     }
 
-    voiceUri?.let { uri ->
-        PassphraseDialog("Passphrase for this voice file", confirm = false, onSubmit = {
-            voiceUri = null
-            vm.importVoice(uri, it)
-        }, onDismiss = { voiceUri = null })
-    }
     deleteVoice?.let { id ->
         ConfirmDialog("Remove this voice?", "It can be imported again from its .elizvoice file.", "Remove",
             onConfirm = { vm.deleteVoice(id) }, onDismiss = { deleteVoice = null })
@@ -324,12 +335,12 @@ fun SettingsScreen(state: UiState, speaker: SpeakerState, vm: AppViewModel, cont
 
 private fun ms(v: Float) = "${v.toInt()} ms"
 
-private fun describeVoice(m: VoiceManifest): String {
-    val date = m.consent?.let { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it.timeMillis)) }
-    return when (m.kind) {
-        "own" -> "${m.name}: made from ${m.speakerName}'s own recordings (consent given $date). AI-generated."
-        "donor" -> "${m.name}: made from ${m.speakerName}'s recordings, with their consent ($date). AI-generated."
-        else -> "${m.name}: published voice (${m.licence}). AI-generated."
+private fun describeVoice(v: EngineVoice): String {
+    val date = v.consentTimeMillis?.let { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it)) }
+    return when (v.kind) {
+        "own" -> "${v.name}: made from ${v.speakerName}'s own recordings (consent given $date). AI-generated."
+        "donor" -> "${v.name}: made from ${v.speakerName}'s recordings, with their consent ($date). AI-generated."
+        else -> "${v.name}: published voice (${v.licence}). AI-generated."
     }
 }
 

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- No network access, ever. CI checks the final APK. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+
+    <!-- Voice management (list, back up, restore, remove) is limited to apps signed with the same key. -->
+    <permission
+        android:name="uk.elizabeth.speech.permission.MANAGE_VOICES"
+        android:label="Manage installed voices"
+        android:protectionLevel="signature" />
+
+    <application
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@drawable/ic_engine"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        tools:targetApi="35">
+
+        <service
+            android:name=".PiperTtsService"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.TTS_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data android:name="android.speech.tts" android:resource="@xml/tts_engine" />
+        </service>
+
+        <activity
+            android:name=".VoicesActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.INSTALL_TTS_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="uk.elizabeth.speech.action.IMPORT_VOICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".CheckVoiceDataActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.CHECK_TTS_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name=".VoiceProvider"
+            android:authorities="uk.elizabeth.speech.voices"
+            android:exported="true"
+            android:permission="uk.elizabeth.speech.permission.MANAGE_VOICES" />
+    </application>
+</manifest>

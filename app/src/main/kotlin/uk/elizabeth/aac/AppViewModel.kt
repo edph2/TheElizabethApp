@@ -5,14 +5,11 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import uk.elizabeth.aac.audio.AudioPlayer
 import uk.elizabeth.aac.audio.VoiceRecorder
@@ -22,7 +19,7 @@ import uk.elizabeth.aac.core.audio.QualityReport
 import uk.elizabeth.aac.core.audio.RecordingQuality
 import uk.elizabeth.aac.core.audio.Wav
 import uk.elizabeth.aac.core.data.AppData
-import uk.elizabeth.aac.core.data.WrongPassphraseException
+import uk.elizabeth.voiceformat.WrongPassphraseException
 import uk.elizabeth.aac.core.model.AppSettings
 import uk.elizabeth.aac.core.model.SpeechSettings
 import uk.elizabeth.aac.core.model.Phrase
@@ -31,23 +28,20 @@ import uk.elizabeth.aac.core.predict.WordPredictor
 import uk.elizabeth.aac.core.privacy.PinHasher
 import uk.elizabeth.aac.core.privacy.PrivacyEventType
 import uk.elizabeth.aac.core.text.MessageEditor
-import uk.elizabeth.aac.core.text.Sentences
 import uk.elizabeth.aac.core.touch.Suggestion
 import uk.elizabeth.aac.core.touch.TouchAdvisor
 import uk.elizabeth.aac.core.touch.TouchEvent
 import uk.elizabeth.aac.core.touch.TouchStats
-import uk.elizabeth.aac.core.voice.VoiceManifest
 import uk.elizabeth.aac.core.voicebank.VoiceBank
-import uk.elizabeth.aac.core.voicebank.VoiceConsent
 import uk.elizabeth.aac.core.voicebank.VoiceTake
 import uk.elizabeth.aac.data.Repository
-import uk.elizabeth.aac.speech.PiperVoice
+import uk.elizabeth.aac.speech.EngineClient
+import uk.elizabeth.aac.speech.EngineVoice
 import uk.elizabeth.aac.speech.Speaker
-import uk.elizabeth.aac.speech.VoiceModels
+import uk.elizabeth.voiceformat.VoiceConsent
 import java.text.DateFormat
 import java.util.Date
 import java.util.UUID
-import kotlin.coroutines.resume
 
 enum class Screen { MAIN, SETTINGS, PHRASES, PRIVACY, VOICE_BANK }
 
@@ -95,15 +89,14 @@ data class UiState(
     val pendingRecording: PendingRecording? = null,
     /** The voice banking sentence currently shown. */
     val promptIndex: Int = 0,
-    /** Voice models installed on the tablet (her own voice, donor or published voices). */
-    val installedVoices: List<VoiceInfo> = emptyList(),
-    /** True while an installed voice is preparing or speaking a message. */
-    val customSpeaking: Boolean = false,
+    /** Voices installed in the Piper Voice Engine app (her own voice, donor or published voices). */
+    val installedVoices: List<EngineVoice> = emptyList(),
+    /** Whether the Piper Voice Engine app is installed. */
+    val engineInstalled: Boolean = false,
     /** True while a backup is being written, checked or restored. */
     val backupBusy: Boolean = false,
 )
 
-data class VoiceInfo(val id: String, val manifest: VoiceManifest)
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = Repository(application)
@@ -113,7 +106,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val editor = MessageEditor()
     private val predictor = WordPredictor(WordPredictor.loadSeedWords())
     private val chime = Chime.generate()
-    private val voiceModels = VoiceModels(application)
+    private val engine = EngineClient(application)
 
     /** The voice banking script: the bundled sentences plus any the family added. */
     private val script = VoiceBank.loadScript()
@@ -186,7 +179,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onAttention() {
-        synthesis?.cancel()
         if (_state.value.attentionOn) {
             player.stop()
             _state.update { it.copy(attentionOn = false) }
@@ -209,7 +201,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun say(phrase: Phrase) {
         val recordingId = phrase.recordingId
         if (recordingId == null) return sayText(phrase.text)
-        synthesis?.cancel()
         viewModelScope.launch {
             val audio = repository.loadRecording(recordingId)?.let { runCatching { Wav.decode(it) }.getOrNull() }
             if (audio != null) {
@@ -229,111 +220,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun speakAloud(text: String) {
         player.stop()
-        speaker.stop()
-        synthesis?.cancel()
         _state.update { it.copy(attentionOn = false) }
-        val voice = piper
-        if (voice == null) {
-            if (!speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
-            return
-        }
-        // Her own (or another installed) voice, synthesised on the tablet. Sentence by sentence,
-        // so she is heard as soon as the first sentence is ready rather than after the whole message.
-        val rate = settings.speech.rate
-        synthesis = viewModelScope.launch {
-            _state.update { it.copy(customSpeaking = true) }
-            val queue = Channel<PcmAudio>(capacity = 1)
-            launch(Dispatchers.Default) {
-                try {
-                    for (sentence in Sentences.split(text)) queue.send(voice.synthesize(sentence, rate))
-                    queue.close()
-                } catch (e: CancellationException) {
-                    queue.close()
-                    throw e
-                } catch (e: Exception) {
-                    queue.close(e)
-                }
-            }
-            var played = false
-            try {
-                for (audio in queue) {
-                    if (audio.samples.isEmpty()) continue
-                    playAndWait(audio)
-                    played = true
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (!played && !speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
-            } finally {
-                _state.update { it.copy(customSpeaking = false) }
-            }
-        }
+        // Installed voices (including her own) speak through the separate Piper Voice Engine app,
+        // via Android's standard text-to-speech system, like any other speech engine.
+        if (!speaker.speak(text)) _state.update { it.copy(fallbackText = text) }
     }
 
-    private suspend fun playAndWait(audio: PcmAudio) = suspendCancellableCoroutine { cont ->
-        cont.invokeOnCancellation { player.stop() }
-        player.play(audio) { if (cont.isActive) cont.resume(Unit) }
-    }
+    // ---- Voices (installed in the Piper Voice Engine app) ----
 
-    // ---- Voices ----
+    private fun configureSpeech(speech: SpeechSettings) = speaker.configure(speech)
 
-    private var piper: PiperVoice? = null
-    private var synthesis: Job? = null
-
-    /** Applies speech settings: the Android voice (always kept ready as a fallback) and any installed voice. */
-    private fun configureSpeech(speech: SpeechSettings) {
-        speaker.configure(speech)
-        val wanted = speech.customVoiceId
-        if (piper?.voice?.id == wanted) return
-        piper?.release()
-        piper = null
-        refreshVoices()
-        if (wanted == null) return
+    /** Re-reads the voices installed in the engine app (e.g. after returning from importing one). */
+    fun refreshVoices() {
         viewModelScope.launch {
-            val loaded = withContext(Dispatchers.IO) {
-                runCatching { voiceModels.find(wanted)?.let { PiperVoice(it) } }.getOrNull()
-            }
-            if (loaded != null && settings.speech.customVoiceId == wanted) {
-                piper = loaded
-            } else {
-                loaded?.release()
-                if (settings.speech.customVoiceId == wanted) notify("The chosen voice could not be loaded, so the tablet's own voice is being used.")
-            }
+            val installed = withContext(Dispatchers.IO) { engine.isInstalled() }
+            val voices = withContext(Dispatchers.IO) { engine.voices() }
+            _state.update { it.copy(engineInstalled = installed, installedVoices = voices) }
         }
     }
 
-    private fun refreshVoices() {
-        viewModelScope.launch {
-            val voices = withContext(Dispatchers.IO) { voiceModels.list() }
-            _state.update { it.copy(installedVoices = voices.map { v -> VoiceInfo(v.id, v.manifest) }) }
-        }
-    }
-
-    fun importVoice(uri: Uri, passphrase: CharArray) {
-        viewModelScope.launch {
-            _state.update { it.copy(notice = "Importing the voice…") }
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val resolver = getApplication<Application>().contentResolver
-                    (resolver.openInputStream(uri) ?: error("Could not open the file")).use { voiceModels.import(it, passphrase) }
-                }
-            }.onSuccess { voice ->
-                updateData { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_MODEL_ADDED, now(), voice.manifest.name)) }
-                refreshVoices()
-                notify("\"${voice.manifest.name}\" is installed. Choose it below to use it.")
-            }.onFailure { e ->
-                notify(if (e is WrongPassphraseException) "Wrong passphrase, or the file is damaged" else "Could not import the voice: ${e.message}")
-            }
-            passphrase.fill(' ')
-        }
+    /** Speak with a voice installed in the engine app, or null for the tablet's own speech voice. */
+    fun chooseVoice(voiceId: String?) = updateSettings {
+        it.copy(speech = it.speech.copy(enginePackage = if (voiceId == null) null else EngineClient.PACKAGE, voiceName = voiceId))
     }
 
     fun deleteVoice(id: String) {
-        if (settings.speech.customVoiceId == id) updateSettings { it.copy(speech = it.speech.copy(customVoiceId = null)) }
+        if (settings.speech.voiceName == id) chooseVoice(null)
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { voiceModels.delete(id) }
-            updateData { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_MODEL_REMOVED, now())) }
+            runCatching { withContext(Dispatchers.IO) { engine.deleteVoice(id) } }
+                .onSuccess { updateData { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.VOICE_MODEL_REMOVED, now())) } }
+                .onFailure { e -> notify("Could not remove the voice: ${e.message}") }
             refreshVoices()
         }
     }
@@ -547,11 +463,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val bank = _state.value.data.voiceBank
         viewModelScope.launch {
             repository.deleteAllVoiceTakes()
-            val madeFromThem = withContext(Dispatchers.IO) { voiceModels.list().filter { bank.isSourceOf(it.manifest.consent) } }
-            if (madeFromThem.any { it.id == settings.speech.customVoiceId }) {
-                updateSettings { it.copy(speech = it.speech.copy(customVoiceId = null)) }
+            val madeFromThem = withContext(Dispatchers.IO) {
+                engine.voices().filter { v ->
+                    val speaker = v.consentSpeaker
+                    val time = v.consentTimeMillis
+                    speaker != null && time != null && bank.isSourceOf(VoiceConsent(speaker, true, "", time))
+                }
             }
-            withContext(Dispatchers.IO) { madeFromThem.forEach { voiceModels.delete(it.id) } }
+            if (madeFromThem.any { it.id == settings.speech.voiceName }) chooseVoice(null)
+            val notRemoved = withContext(Dispatchers.IO) {
+                madeFromThem.filter { v -> runCatching { engine.deleteVoice(v.id) }.isFailure }
+            }
+            if (notRemoved.isNotEmpty()) notify("Please remove these voices in the Piper Voice Engine app: ${notRemoved.joinToString { it.name }}")
             updateData { d ->
                 var log = d.privacyLog.append(PrivacyEventType.VOICE_CONSENT_WITHDRAWN, now())
                 madeFromThem.forEach { log = log.append(PrivacyEventType.VOICE_MODEL_REMOVED, now()) }
@@ -637,7 +560,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun eraseEverything() {
         viewModelScope.launch {
             repository.eraseAll()
-            withContext(Dispatchers.IO) { voiceModels.deleteAll() }
+            withContext(Dispatchers.IO) { if (engine.canManage()) runCatching { engine.deleteAll() } }
             predictor.forgetAll()
             editor.clear()
             val fresh = AppData().let { it.copy(privacyLog = it.privacyLog.append(PrivacyEventType.ALL_DATA_ERASED, now())) }
@@ -660,8 +583,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(backupBusy = true) }
         viewModelScope.launch {
             runCatching {
-                val voices = if (includeVoices) withContext(Dispatchers.IO) { voiceModels.list() } else emptyList()
-                repository.exportBackup(openOutput(uri), data, predictor.export(), passphrase, voiceModels, voices, now())
+                val voices = if (includeVoices) withContext(Dispatchers.IO) { engine.voices().map { it.id } } else emptyList()
+                repository.exportBackup(openOutput(uri), data, predictor.export(), passphrase, voices, engine::openVoice, now())
             }.onSuccess { info ->
                 updateData {
                     it.copy(
@@ -704,7 +627,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val log = _state.value.data.privacyLog
             runCatching {
                 val resolver = getApplication<Application>().contentResolver
-                repository.restoreBackup({ resolver.openInputStream(uri) ?: error("Could not open the file") }, passphrase, voiceModels)
+                repository.restoreBackup(
+                    { resolver.openInputStream(uri) ?: error("Could not open the file") }, passphrase,
+                    installVoice = if (engine.canManage()) engine::installVoice else null,
+                )
             }.onSuccess { result ->
                 // Keep this tablet's privacy log and record the restore in it. Everything restored
                 // is, by definition, in that backup.
@@ -715,14 +641,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 predictor.import(result.wordModel)
                 _state.update { it.copy(data = data, tab = data.board.categories.firstOrNull()?.id ?: Tabs.KEYBOARD, page = 0, promptIndex = 0) }
                 saveData.trySend(Unit)
-                piper?.release()
-                piper = null
                 configureSpeech(data.settings.speech)
                 refreshVoices()
                 refreshText()
                 notify(
                     if (result.failedVoices.isEmpty()) "Data restored"
-                    else "Data restored, but these voices failed their checks and were not installed: ${result.failedVoices.joinToString()}",
+                    else "Data restored, but ${result.failedVoices.size} voice(s) could not be installed. " +
+                        if (engine.canManage()) "They failed the speech engine's checks." else "Install the Piper Voice Engine app, then restore again.",
                 )
             }.onFailure { e ->
                 notify(if (e is WrongPassphraseException) "Wrong passphrase, or the file is damaged. Nothing was changed." else "Could not restore: ${e.message}")
@@ -756,7 +681,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun now() = System.currentTimeMillis()
 
     override fun onCleared() {
-        piper?.release()
         player.stop()
         speaker.shutdown()
     }

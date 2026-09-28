@@ -3,8 +3,9 @@ package uk.elizabeth.aac.core.voicebank
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import uk.elizabeth.aac.core.audio.Wav
-import uk.elizabeth.aac.core.data.BackupWriter
-import uk.elizabeth.aac.core.privacy.sha256Hex
+import uk.elizabeth.voiceformat.BackupWriter
+import uk.elizabeth.voiceformat.VoiceConsent
+import uk.elizabeth.voiceformat.sha256Hex
 
 @Serializable
 data class TrainingManifest(

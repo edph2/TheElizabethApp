@@ -6,7 +6,7 @@ import uk.elizabeth.aac.core.print.PaperBoard
 import uk.elizabeth.aac.core.privacy.PinGuard
 import uk.elizabeth.aac.core.text.Sentences
 import uk.elizabeth.aac.core.voicebank.VoiceBank
-import uk.elizabeth.aac.core.voicebank.VoiceConsent
+import uk.elizabeth.voiceformat.VoiceConsent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

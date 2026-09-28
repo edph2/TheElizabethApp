@@ -43,7 +43,7 @@ import uk.elizabeth.aac.RecordTarget
 import uk.elizabeth.aac.Screen
 import uk.elizabeth.aac.UiState
 import uk.elizabeth.aac.core.voicebank.VoiceBank
-import uk.elizabeth.aac.core.voicebank.VoiceConsent
+import uk.elizabeth.voiceformat.VoiceConsent
 
 private const val REST_AFTER_MS = 15 * 60 * 1000L
 

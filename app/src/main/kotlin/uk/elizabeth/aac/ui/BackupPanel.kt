@@ -25,7 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import uk.elizabeth.aac.AppViewModel
 import uk.elizabeth.aac.UiState
-import uk.elizabeth.aac.core.data.Backup
+import uk.elizabeth.voiceformat.Backup
 import uk.elizabeth.aac.core.data.BackupReminder
 import java.text.DateFormat
 import java.time.LocalDate

@@ -12,11 +12,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import uk.elizabeth.aac.core.data.AppData
 import uk.elizabeth.aac.core.data.BackupInfo
-import uk.elizabeth.aac.core.data.WrongPassphraseException
+import uk.elizabeth.voiceformat.WrongPassphraseException
 import uk.elizabeth.aac.core.model.History
 import uk.elizabeth.aac.data.Repository
-import uk.elizabeth.aac.speech.PiperVoice
-import uk.elizabeth.aac.speech.VoiceModels
+import uk.elizabeth.aac.speech.EngineClient
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -25,7 +24,7 @@ import java.io.File
 class RepositoryTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
-    private val voices = VoiceModels(context)
+    private val engine = EngineClient(context)
 
     @Test
     fun exportEraseRestoreRoundTrip() = runBlocking {
@@ -37,7 +36,7 @@ class RepositoryTest {
         repo.saveVoiceTake("vb1", byteArrayOf(4, 5, 6))
 
         val out = ByteArrayOutputStream()
-        val info = repo.exportBackup(out, data, "1\ttea\t3\n", "correct horse".toCharArray(), voices, emptyList(), 1234)
+        val info = repo.exportBackup(out, data, "1\ttea\t3\n", "correct horse".toCharArray(), emptyList(), engine::openVoice, 1234)
         assertEquals(BackupInfo(1234, 1, 1, 0), info)
         val export = out.toByteArray()
 
@@ -50,13 +49,13 @@ class RepositoryTest {
 
         // A wrong passphrase changes nothing.
         try {
-            repo.restoreBackup({ ByteArrayInputStream(export) }, "wrong horse!".toCharArray(), voices)
+            repo.restoreBackup({ ByteArrayInputStream(export) }, "wrong horse!".toCharArray(), null)
             fail("Wrong passphrase accepted")
         } catch (expected: WrongPassphraseException) {
         }
         assertTrue(repo.recordingIds().isEmpty())
 
-        val restored = repo.restoreBackup({ ByteArrayInputStream(export) }, "correct horse".toCharArray(), voices)
+        val restored = repo.restoreBackup({ ByteArrayInputStream(export) }, "correct horse".toCharArray(), null)
         assertEquals(data, restored.data)
         assertEquals("1\ttea\t3\n", restored.wordModel)
         assertArrayEquals(byteArrayOf(1, 2, 3), repo.loadRecording("rec1"))
@@ -70,10 +69,10 @@ class RepositoryTest {
         val repo = Repository(context)
         repo.saveRecording("keep", byteArrayOf(9))
         val out = ByteArrayOutputStream()
-        repo.exportBackup(out, AppData(), "", "correct horse".toCharArray(), voices, emptyList(), 1)
+        repo.exportBackup(out, AppData(), "", "correct horse".toCharArray(), emptyList(), engine::openVoice, 1)
         val truncated = out.toByteArray().let { it.copyOf(it.size - 40) }
         try {
-            repo.restoreBackup({ ByteArrayInputStream(truncated) }, "correct horse".toCharArray(), voices)
+            repo.restoreBackup({ ByteArrayInputStream(truncated) }, "correct horse".toCharArray(), null)
             fail("Truncated export accepted")
         } catch (expected: Exception) {
         }
@@ -83,39 +82,30 @@ class RepositoryTest {
 
     @Test
     fun installedVoicesAreBackedUpAndRestored() = runBlocking {
-        val assets = instrumentation.context.assets
-        assumeTrue("test voice not packaged", assets.list("")?.contains("test.elizvoice") == true)
+        assumeTrue("speech engine or test voice missing", engine.canManage() && TestVoice.available())
         val repo = Repository(context)
         // Written to a file, as the app does: a backup with a voice is too big to hold in memory.
         val backup = File(context.cacheDir, "voice-backup-test.elizbak")
-        voices.deleteAll()
         try {
-            val voice = assets.open("test.elizvoice").use { voices.import(it, "correct horse battery".toCharArray()) }
-
+            TestVoice.install(context, engine)
             val info = backup.outputStream().use { out ->
-                repo.exportBackup(out, AppData(), "", "correct horse".toCharArray(), voices, voices.list(), 1)
+                repo.exportBackup(out, AppData(), "", "correct horse".toCharArray(), listOf(TestVoice.ID), engine::openVoice, 1)
             }
             assertEquals(1, info.voices)
-            voices.deleteAll()
-            assertTrue(voices.list().isEmpty())
+            engine.deleteVoice(TestVoice.ID)
+            assertTrue(engine.voices().none { it.id == TestVoice.ID })
 
             assertEquals(1, backup.inputStream().use { repo.checkBackup(it, "correct horse".toCharArray()) }.voices)
-            val result = repo.restoreBackup({ backup.inputStream() }, "correct horse".toCharArray(), voices)
-            assertTrue(result.failedVoices.isEmpty())
-            val restored = voices.list().single()
-            assertEquals(voice.id, restored.id)
-            assertEquals(voice.manifest.modelSha256, restored.manifest.modelSha256)
+            val result = repo.restoreBackup({ backup.inputStream() }, "correct horse".toCharArray(), engine::installVoice)
+            assertTrue(result.failedVoices.toString(), result.failedVoices.isEmpty())
+            assertTrue(engine.voices().any { it.id == TestVoice.ID })
 
-            // The restored voice still speaks.
-            val piper = PiperVoice(restored)
-            try {
-                assertTrue(piper.synthesize("Hello again.", 1.0f).durationMs > 300)
-            } finally {
-                piper.release()
-            }
+            // Without the engine, voices are reported rather than silently lost.
+            val withoutEngine = repo.restoreBackup({ backup.inputStream() }, "correct horse".toCharArray(), null)
+            assertEquals(listOf(TestVoice.ID), withoutEngine.failedVoices)
         } finally {
             backup.delete()
-            voices.deleteAll()
+            runCatching { engine.deleteVoice(TestVoice.ID) }
             repo.eraseAll()
         }
     }

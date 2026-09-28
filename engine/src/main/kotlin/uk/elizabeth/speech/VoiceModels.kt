@@ -1,17 +1,22 @@
-package uk.elizabeth.aac.speech
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Piper Voice Engine. Free software under the GNU GPL v3 or later: see engine/LICENSE.
+package uk.elizabeth.speech
 
 import android.content.Context
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
-import uk.elizabeth.aac.core.audio.PcmAudio
-import uk.elizabeth.aac.core.data.Backup
-import uk.elizabeth.aac.core.privacy.sha256Hex
-import uk.elizabeth.aac.core.voice.VoiceManifest
+import uk.elizabeth.voiceformat.Backup
+import uk.elizabeth.voiceformat.sha256Hex
+import uk.elizabeth.voiceformat.VoiceManifest
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -24,10 +29,10 @@ class InstalledVoice(val id: String, val dir: File, val manifest: VoiceManifest,
 /**
  * Installs and removes voice models (".elizvoice" files from tools/voice-training).
  *
- * The engine reads model files directly from disk, so installed models are stored in the
+ * The engine reads model files directly from disk, so installed models are stored in this
  * app's private no-backup folder, protected by Android's file-based encryption and the app
- * sandbox, rather than by the app's own encryption. Her raw recordings, which are more
- * sensitive, stay encrypted by the app.
+ * sandbox. Every voice is checked before it is installed: a consent record (or, for a
+ * published voice, a licence) and the checksums of the model and phoneme table.
  */
 class VoiceModels(context: Context) {
     private val root = File(context.noBackupFilesDir, "voices").apply { mkdirs() }
@@ -77,40 +82,57 @@ class VoiceModels(context: Context) {
         return (under(voice.dir, "") + under(sharedEspeak, "$ESPEAK/")).sortedBy { it.first }.toList()
     }
 
-    /** Writes one file of a voice being restored from a backup. Call [finishRestore] afterwards. */
-    fun restoreFile(id: String, relativePath: String, data: InputStream) {
-        require(id.matches(Regex("[A-Za-z0-9-]{1,64}"))) { "Bad voice id in backup" }
-        writeInto(partialDir(id), relativePath, data, MAX_BYTES)
+    /**
+     * Writes an installed voice as a plain (unencrypted) ZIP in the voice package layout
+     * ("voice/..."), including the shared pronunciation data. Used by apps that back voices up
+     * inside their own encrypted backups.
+     */
+    fun exportPlain(voice: InstalledVoice, out: OutputStream) {
+        ZipOutputStream(out).use { zip ->
+            for ((path, file) in files(voice)) {
+                zip.putNextEntry(ZipEntry("voice/$path"))
+                file.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
+        }
     }
 
     /**
-     * Installs the voices written by [restoreFile], replacing any installed voice with the same
-     * id. Each voice is checked exactly as on import. Returns the names of voices that failed.
+     * Installs a voice from a plain ZIP written by [exportPlain], keeping [id]. An installed voice
+     * with the same id is replaced only once the new copy has passed every check.
      */
-    fun finishRestore(): List<String> {
-        val failed = mutableListOf<String>()
-        root.listFiles { f -> f.isDirectory && f.name.endsWith(PARTIAL) }.orEmpty().forEach { partial ->
-            val id = partial.name.removeSuffix(PARTIAL)
-            // Keep the installed copy until the restored one has passed its checks.
+    fun installPlain(id: String, input: InputStream): InstalledVoice {
+        require(id.matches(Regex("[A-Za-z0-9-]{1,64}"))) { "Bad voice id" }
+        val partial = partialDir(id)
+        try {
+            var total = 0L
+            ZipInputStream(input).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    val name = entry.name
+                    if (entry.isDirectory || !name.startsWith("voice/") || !Backup.isSafeRelativePath(name)) continue
+                    total += writeInto(partial, name.removePrefix("voice/"), zip, MAX_BYTES - total)
+                }
+            }
             val existing = File(root, id)
             val previous = File(root, id + OLD)
             if (existing.exists()) existing.renameTo(previous)
             try {
-                install(partial, id)
+                val installed = install(partial, id)
                 previous.deleteRecursively()
+                return installed
             } catch (e: Exception) {
-                failed += runCatching { load(partial).manifest.name }.getOrDefault(id)
                 if (previous.exists()) previous.renameTo(existing)
-            } finally {
-                if (partial.exists()) partial.deleteRecursively()
+                throw e
             }
+        } finally {
+            if (partial.exists()) partial.deleteRecursively()
         }
-        return failed
     }
 
-    /** Removes any half-restored voices (e.g. after a failed restore). */
+    /** Removes any half-installed voices (e.g. after the app was stopped mid-import). */
     fun discardPartial() {
-        root.listFiles { f -> f.name.endsWith(PARTIAL) }.orEmpty().forEach { it.deleteRecursively() }
+        root.listFiles { f -> f.name.endsWith(PARTIAL) || f.name.endsWith(OLD) }.orEmpty().forEach { it.deleteRecursively() }
     }
 
     private fun partialDir(id: String) = File(root, id + PARTIAL).apply { mkdirs() }
@@ -188,8 +210,8 @@ class VoiceModels(context: Context) {
 }
 
 /**
- * Speaks with an installed Piper voice, entirely on the tablet, using the sherpa-onnx engine.
- * Loading takes a second or two, so keep one instance while the voice is selected.
+ * Synthesises speech with an installed Piper voice using sherpa-onnx, entirely on the device.
+ * Loading takes a second or two, so keep one instance while the voice is in use.
  */
 class PiperVoice(val voice: InstalledVoice) {
     private val tts = OfflineTts(
@@ -208,14 +230,25 @@ class PiperVoice(val voice: InstalledVoice) {
         ),
     )
 
-    /** Synthesises [text]. [speed] 1.0 is normal. Call off the main thread. */
-    fun synthesize(text: String, speed: Float): PcmAudio {
-        val audio = tts.generate(text, 0, speed.coerceIn(0.5f, 2.0f))
-        val samples = ShortArray(audio.samples.size) { i ->
-            (audio.samples[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+    val sampleRate: Int get() = tts.sampleRate()
+
+    /**
+     * Synthesises [text] sentence by sentence, passing each piece of audio (16-bit PCM) to
+     * [onAudio] as soon as it is ready. [onAudio] returns false to stop. [speed] 1.0 is normal.
+     */
+    fun stream(text: String, speed: Float, onAudio: (ShortArray) -> Boolean) {
+        tts.generateWithCallback(text, 0, speed.coerceIn(0.5f, 2.0f)) { samples ->
+            if (onAudio(toPcm(samples))) 1 else 0
         }
-        return PcmAudio(samples, audio.sampleRate)
     }
 
+    /** Synthesises [text] in one go. Call off the main thread. */
+    fun synthesize(text: String, speed: Float): ShortArray =
+        toPcm(tts.generate(text, 0, speed.coerceIn(0.5f, 2.0f)).samples)
+
     fun release() = tts.release()
+
+    private fun toPcm(samples: FloatArray) = ShortArray(samples.size) { i ->
+        (samples[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
+    }
 }

@@ -1,7 +1,7 @@
 package uk.elizabeth.aac.core.privacy
 
 import kotlinx.serialization.Serializable
-import java.security.MessageDigest
+import uk.elizabeth.voiceformat.sha256Hex
 
 @Serializable
 enum class PrivacyEventType {
@@ -77,6 +77,3 @@ data class PrivacyLog(val events: List<PrivacyEvent> = emptyList()) {
         }
     }
 }
-
-fun sha256Hex(bytes: ByteArray): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
