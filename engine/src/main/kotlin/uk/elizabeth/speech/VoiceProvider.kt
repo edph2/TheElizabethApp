@@ -40,7 +40,7 @@ class VoiceProvider : ContentProvider() {
         val cursor = MatrixCursor(COLUMNS)
         for (v in models.list()) {
             val m = v.manifest
-            cursor.addRow(arrayOf(v.id, m.name, m.kind, m.speakerName, m.licence, m.locale, m.consent?.speakerName, m.consent?.timeMillis, m.syntheticVoiceNotice))
+            cursor.addRow(arrayOf<Any?>(v.id, m.name, m.kind, m.speakerName, m.licence, m.locale, m.consent?.speakerName, m.consent?.timeMillis, m.syntheticVoiceNotice))
         }
         return cursor
     }
