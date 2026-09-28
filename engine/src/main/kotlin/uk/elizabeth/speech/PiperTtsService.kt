@@ -8,6 +8,7 @@ import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
+import android.util.Log
 import java.util.Locale
 import java.util.MissingResourceException
 
@@ -30,6 +31,8 @@ class PiperTtsService : TextToSpeechService() {
     }
 
     override fun onDestroy() {
+        // Stop any synthesis first, then wait for it to finish before freeing the native voice.
+        stopped = true
         synchronized(lock) {
             loaded?.release()
             loaded = null
@@ -90,6 +93,11 @@ class PiperTtsService : TextToSpeechService() {
             callback.error(TextToSpeech.ERROR_NOT_INSTALLED_YET)
             return
         }
+        // The lock is held for the whole utterance, so the voice is never released while in use.
+        synchronized(lock) { speak(voice, request, callback) }
+    }
+
+    private fun speak(voice: InstalledVoice, request: SynthesisRequest, callback: SynthesisCallback) {
         try {
             val piper = piperFor(voice)
             if (callback.start(piper.sampleRate, AudioFormat.ENCODING_PCM_16BIT, 1) != TextToSpeech.SUCCESS) return
@@ -114,16 +122,18 @@ class PiperTtsService : TextToSpeechService() {
             }
             callback.done()
         } catch (e: Exception) {
+            Log.e(TAG, "Synthesis failed", e)
             callback.error(TextToSpeech.ERROR_SYNTHESIS)
         }
     }
 
-    /** Reuses the loaded voice unless another voice is wanted or the installed voices changed. */
-    private fun piperFor(voice: InstalledVoice): PiperVoice = synchronized(lock) {
+    /** Reuses the loaded voice unless another voice is wanted or the installed voices changed. Call holding [lock]. */
+    private fun piperFor(voice: InstalledVoice): PiperVoice {
         val current = loaded
         if (current != null && current.voice.id == voice.id && loadedGeneration == VoiceChanges.generation) return current
         current?.release()
-        PiperVoice(voice).also {
+        loaded = null
+        return PiperVoice(voice).also {
             loaded = it
             loadedGeneration = VoiceChanges.generation
         }
@@ -144,6 +154,8 @@ class PiperTtsService : TextToSpeechService() {
             ?: voices.firstOrNull { matchesLanguage(localeOf(it), lang) }
 
     private companion object {
+        const val TAG = "PiperTtsService"
+
         fun localeOf(v: InstalledVoice): Locale = Locale.forLanguageTag(v.manifest.locale)
 
         fun iso3Language(l: Locale) = try { l.isO3Language } catch (e: MissingResourceException) { l.language }

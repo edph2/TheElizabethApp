@@ -63,7 +63,7 @@ class AndroidSpeechSystemTest {
 
         if (direct.contentEquals(direct2)) {
             // The model is deterministic, so Android's speech system must pass the audio through unchanged.
-            assertArrayEquals(direct, viaAndroid)
+            assertArrayEquals("deterministic model, but audio differs (${viaAndroid.size} vs ${direct.size} samples)", direct, viaAndroid)
         } else {
             // Piper adds natural random variation to each utterance, so compare length and loudness instead.
             val lengthRatio = viaAndroid.size.toDouble() / direct.size
@@ -78,11 +78,13 @@ class AndroidSpeechSystemTest {
         var status = TextToSpeech.ERROR
         val tts = TextToSpeech(context, { status = it; ready.countDown() }, context.packageName)
         try {
-            assertTrue(ready.await(30, TimeUnit.SECONDS))
-            assertEquals(TextToSpeech.SUCCESS, status)
-            val voice = tts.voices.first { it.name == voiceName }
-            assertEquals(false, voice.isNetworkConnectionRequired)
-            tts.setVoice(voice)
+            assertTrue("engine did not connect", ready.await(30, TimeUnit.SECONDS))
+            assertEquals("engine failed to initialise", TextToSpeech.SUCCESS, status)
+            val voices = tts.voices.orEmpty()
+            val voice = voices.firstOrNull { it.name == voiceName }
+                ?: throw AssertionError("voice $voiceName not offered; engine offers ${voices.map { it.name }}")
+            assertEquals("voice must not need the network", false, voice.isNetworkConnectionRequired)
+            assertEquals("could not select the voice", TextToSpeech.SUCCESS, tts.setVoice(voice))
             tts.setSpeechRate(1.0f)
             val done = CountDownLatch(1)
             var failed = false
@@ -97,7 +99,7 @@ class AndroidSpeechSystemTest {
                 }
             })
             val file = File(context.cacheDir, "through-android.wav")
-            assertEquals(TextToSpeech.SUCCESS, tts.synthesizeToFile(text, Bundle(), file, "u1"))
+            assertEquals("synthesizeToFile refused", TextToSpeech.SUCCESS, tts.synthesizeToFile(text, Bundle(), file, "u1"))
             assertTrue("synthesis timed out", done.await(120, TimeUnit.SECONDS))
             assertTrue("synthesis failed", !failed)
             return readPcm(file.readBytes()).also { file.delete() }

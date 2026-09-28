@@ -118,9 +118,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           # The engine's own tests, then the app's tests with the engine installed (as on a real tablet).
-          script: |
-            ./gradlew --no-daemon :engine:connectedDebugAndroidTest
-            ./gradlew --no-daemon :engine:installDebug :app:connectedDebugAndroidTest
+          script: tools/run_device_tests.sh
 
       - name: Upload device test reports
         if: always()
