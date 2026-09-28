@@ -44,8 +44,8 @@ class BackupWriter internal constructor(private val zip: ZipOutputStream) {
 /**
  * Export files: a ZIP of open formats (JSON, text, WAV) encrypted with a passphrase.
  * Used for backups (moving to a new tablet, giving her a copy of her data) and for the
- * voice-training export. The format is documented in docs/DATA_EXPORT.md and can be
- * decrypted without this app using tools/decrypt_export.py.
+ * voice-training export, and for voice packages. The encryption is documented in
+ * docs/VOICE_FILES.md, and tools/voice-training/elizbak.py implements it in Python.
  *
  * The ZIP is encrypted as a stream of 64 KiB chunks, so large exports never need to fit
  * in memory:

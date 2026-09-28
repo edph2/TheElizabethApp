@@ -52,7 +52,20 @@ workflow:
 4. Open the app. In Settings → Always available, consider making it the home screen.
 5. Updates: install newer release APKs the same way. Data is kept.
 
-**Publishing the engine's source:** the engine is GPL-licensed. Everyone who receives it must be
-able to get its complete source (`engine/` and `voiceformat/`), for example from a public
-repository. Set `source_url` in `engine/src/main/res/values/strings.xml` to that address. See
+## Publishing the engine's source (every engine release)
+
+The engine is GPL-licensed, so everyone who receives it must be able to get its complete source.
+It is published at <https://github.com/edph2/PiperVoiceEngine>, and the engine's own screen
+links there. For each engine version you distribute:
+
+```
+git clone https://github.com/edph2/PiperVoiceEngine ../PiperVoiceEngine
+tools/export_engine_source.sh ../PiperVoiceEngine
+cd ../PiperVoiceEngine
+git add -A && git commit -m "Piper Voice Engine 0.1.0" && git tag v0.1.0 && git push --tags origin main
+```
+
+The script copies only files tracked by git from `engine/`, `voiceformat/`, the build files,
+`public-engine/` (the public repository's README, build settings and CI) and the voice
+packaging tool, and fails if anything from the communication app is included. See
 [LICENSE.md](../LICENSE.md).

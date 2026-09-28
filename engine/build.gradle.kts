@@ -30,7 +30,8 @@ android {
     }
 
     // Release signing. The key is never in the repository: it is supplied by environment
-    // variables (from GitHub secrets in .github/workflows/release.yml). See docs/RELEASE.md.
+    // variables (from secrets when built in CI). Apps that manage the engine's voices must be
+    // signed with the same key.
     val keystore = System.getenv("ELIZABETH_KEYSTORE")
     signingConfigs {
         if (keystore != null) {

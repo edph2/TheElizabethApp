@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">Piper Voice Engine</string>
     <!-- Where the source code of this GPL app is published. Must point to the public source before release. -->
-    <string name="source_url" translatable="false">https://github.com/edph2/TheElizabethApp/tree/main/engine</string>
+    <string name="source_url" translatable="false">https://github.com/edph2/PiperVoiceEngine</string>
 </resources>

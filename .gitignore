@@ -15,3 +15,4 @@ engine/libs/*.aar
 app/libs/*.aar
 app/src/androidTest/assets/*.elizvoice
 engine/src/androidTest/assets/*.elizvoice
+__pycache__/

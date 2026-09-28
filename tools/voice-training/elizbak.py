@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The Elizabeth App's encrypted file format (ELIZBAK2), for the training tools.
 
-See docs/DATA_EXPORT.md. Kept identical to core/.../data/Backup.kt.
+See docs/VOICE_FILES.md. Kept identical to voiceformat/.../Backup.kt.
 """
 import hashlib
 import os

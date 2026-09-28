@@ -40,4 +40,4 @@ can use it.
 | Import an encrypted `.elizvoice` file | `startActivity(Intent("uk.elizabeth.speech.action.IMPORT_VOICE", fileUri))` with `FLAG_GRANT_READ_URI_PERMISSION` | The engine asks for the file's passphrase and checks the voice |
 
 The voice-package format and the encrypted `.elizvoice` format are defined in `voiceformat/`
-(Apache-2.0) and [DATA_EXPORT.md](DATA_EXPORT.md).
+(Apache-2.0) and [VOICE_FILES.md](VOICE_FILES.md).

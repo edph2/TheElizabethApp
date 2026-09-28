@@ -11,6 +11,8 @@ The app writes two kinds of encrypted `.elizbak` file, both only when a carer as
 
 ## Encryption (both files)
 
+The same format is used for voice packages; see [VOICE_FILES.md](VOICE_FILES.md).
+
 A ZIP file is encrypted as a stream of 64 KiB chunks, so large exports never have to fit in
 memory:
 

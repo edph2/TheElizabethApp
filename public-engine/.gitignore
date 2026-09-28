@@ -1,0 +1,14 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+.kotlin/
+*.keystore
+*.jks
+# Voice models and recordings are not part of the source.
+*.wav
+*.onnx
+*.elizvoice
+engine/libs/*.aar
